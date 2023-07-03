@@ -25,6 +25,7 @@ type Positions struct {
 	Status          string    `gorm:"default:'opened'" json:"status"`
 	Exchange        string    `json:"exchange"`
 	LastUpdatePrice string    `json:"last_update_price"`
+	OrderId         string
 }
 
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {

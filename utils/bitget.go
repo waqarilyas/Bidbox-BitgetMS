@@ -38,7 +38,7 @@ type MarginDataResponse struct {
 	Data        []MarginData `json:"data"`
 }
 
-func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) (*MarginData, error) {
+func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) ([]MarginData, error) {
 	expires := helpers.GetBitgetServerTimeStamp()
 	uri := "/api/mix/v1/position/allPosition?productType=sumcbl"
 	signature := GenerateBitgetSignature(apiSecret, "GET", uri, expires)
@@ -75,14 +75,13 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 		return nil, err
 	}
 
-	var requiredPosition MarginData
+	var requiredPosition []MarginData
 	for _, pos := range accountData.Data {
 
 		if pos.Symbol == coin_pair {
-			requiredPosition = pos
-			break
+			requiredPosition = append(requiredPosition, pos)
 		}
 	}
 
-	return &requiredPosition, nil
+	return requiredPosition, nil
 }

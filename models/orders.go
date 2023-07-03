@@ -6,26 +6,28 @@ import (
 
 	"github.com/jinzhu/gorm"
 )
+
 type BybitOrderRequest struct {
-	Category      string `json:"category"`
-	Symbol        string `json:"symbol"`
-	Side          string `json:"side"`
-	OrderType     string `json:"orderType"`
-	Qty           string `json:"qty"`
-	TimeInForce   string `json:"timeInForce"`
-	ReduceOnly    bool   `json:"reduce_only"`
+	Category       string `json:"category"`
+	Symbol         string `json:"symbol"`
+	Side           string `json:"side"`
+	OrderType      string `json:"orderType"`
+	Qty            string `json:"qty"`
+	TimeInForce    string `json:"timeInForce"`
+	ReduceOnly     bool   `json:"reduce_only"`
 	CloseOnTrigger bool   `json:"closeOnTrigger"`
 }
 type BybitResponse struct {
-	RetCode    int                    `json:"retCode"`
-	RetMsg     string                 `json:"retMsg"`
-	Result     struct {
+	RetCode int    `json:"retCode"`
+	RetMsg  string `json:"retMsg"`
+	Result  struct {
 		OrderID     string `json:"orderId"`
 		OrderLinkId string `json:"orderLinkId"`
 	} `json:"result"`
 	RetExtInfo map[string]interface{} `json:"retExtInfo"`
 	Time       int64                  `json:"time"`
 }
+
 // type BybitResponse struct {
 // 	RetCode    int                    `json:"retCode"`
 // 	RetMsg     string                 `json:"retMsg"`
@@ -36,9 +38,6 @@ type BybitResponse struct {
 // 	RetExtInfo map[string]interface{} `json:"retExtInfo"`
 // 	Time       int64                  `json:"time"`
 // }
-
-
-
 
 type OrderRequest struct {
 	Symbol     string `json:"symbol"`
@@ -108,3 +107,25 @@ func (o *Order) SaveOrder(db *gorm.DB) (*Order, error) {
 	}
 	return o, nil
 }
+
+func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {
+	var savedOrders []*Order
+	for _, order := range orders {
+		err := db.Create(order).Error
+		if err != nil {
+			fmt.Println("Error in saving function")
+			return nil, err
+		}
+		savedOrders = append(savedOrders, order)
+	}
+	return savedOrders, nil
+}
+
+// func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {
+// 	err := db.Create(&orders).Error
+// 	if err != nil {
+// 		fmt.Println("Error in saving function")
+// 		return nil, err
+// 	}
+// 	return orders, nil
+// }

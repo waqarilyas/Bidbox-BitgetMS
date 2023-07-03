@@ -40,3 +40,4 @@ jobs:
       - name: Cleaning Server
         run: |
           echo y | docker system prune
+          

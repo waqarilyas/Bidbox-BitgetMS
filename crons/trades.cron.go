@@ -12,6 +12,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"sync"
 
 	"github.com/jinzhu/gorm"
 	"github.com/kryptomind/bidboxapi/bitgetms/helpers"
@@ -29,8 +30,9 @@ func NewUserTradesCron() *TradesCron {
 }
 
 func (server *TradesCron) Run() {
-	key := models.Key{}
+	var wg sync.WaitGroup
 
+	key := models.Key{}
 	keys, err := key.FindKeysByService(server.DB, "bitget")
 	if err != nil {
 		log.Fatal("error getting keys")
@@ -38,27 +40,31 @@ func (server *TradesCron) Run() {
 	}
 
 	for _, v := range *keys {
-		val := int(math.Floor(float64(v.TradeAmount)/100.0) * 100)
-		cond := models.Conditions{}
-		c, err := cond.FindCondition(server.DB, val)
-		if err != nil {
-			return
-		}
+		wg.Add(1)
+		go func(v models.Key) {
+			defer wg.Done()
+			val := int(math.Floor(float64(v.TradeAmount)/100.0) * 100)
+			cond := models.Conditions{}
+			c, err := cond.FindCondition(server.DB, val)
+			if err != nil {
+				return
+			}
 
-		hedge_order_amount := float64(v.TradeAmount) * 0.08 / float64(c.Positions)
-		go placeBitgetOrder(&v, hedge_order_amount)
+			hedgeOrderAmount := float64(v.TradeAmount) * 0.08 / float64(c.Positions)
+			placeBitgetOrder(&v, hedgeOrderAmount, server.DB)
+		}(v)
 	}
 
+	wg.Wait()
 }
 
-func placeBitgetOrder(v *models.Key, amount float64) {
-
+func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB) {
 	if v.UserEmail != "kmtester@yopmail.com" {
 		fmt.Println("---- user is not km tester ---")
 		return
 	}
 
-	api_key, secret_key, passphrase, err := helpers.DecryptAllKeys(v.ApiKey, v.SecretKey, v.Passphrase, "bitget")
+	apiKey, secretKey, passphrase, err := helpers.DecryptAllKeys(v.ApiKey, v.SecretKey, v.Passphrase, "bitget")
 	if err != nil {
 		fmt.Println("error in decryptkeys: ", err)
 		return
@@ -87,11 +93,23 @@ func placeBitgetOrder(v *models.Key, amount float64) {
 		MarginCoin:    "SUSDT",
 		OrderDataList: []bitget_websockets.OrderRequest{longOrder, shortOrder},
 	}
-	go BitgetNewBatchOrder(api_key, secret_key, passphrase, &batchOrderRequest)
 
+	_, error := BitgetNewBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
+	if error != nil {
+		fmt.Println("--- error opening positions ---", error)
+		return
+	}
+
+	orders, err := SaveOrdersInDatabase(db, v, "SETHSUSDT_SUMCBL", amount, "SUSDT", shortOrder, longOrder)
+
+	if err != nil {
+		fmt.Println("----  error saving orders ----", err)
+	}
+
+	fetchAndUpdateBitgetPosition(orders, "SETHSUSDT_SUMCBL", *v, db, apiKey, secretKey, passphrase)
 }
 
-func BitgetNewBatchOrder(api_key string, secret_key string, passphrase string, order *bitget_websockets.BitgetBatchOrderRequest) (string, error) {
+func BitgetNewBatchOrder(apiKey string, secretKey string, passphrase string, order *bitget_websockets.BitgetBatchOrderRequest) (string, error) {
 	host := "https://api.bitget.com"
 	path := "/api/mix/v1/order/batch-orders"
 	url := host + path
@@ -101,17 +119,16 @@ func BitgetNewBatchOrder(api_key string, secret_key string, passphrase string, o
 
 	jsonVal, err := json.Marshal(order)
 	if err != nil {
-
 		return "", err
 	}
 
-	server_time := helpers.GetBitgetServerTimeStamp()
-	signatures := GenerateBitgetSignature(secret_key, api_key, passphrase, "POST", path, server_time, string(jsonVal))
+	serverTime := helpers.GetBitgetServerTimeStamp()
+	signature := GenerateBitgetSignature(secretKey, apiKey, passphrase, "POST", path, serverTime, string(jsonVal))
 
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonVal))
-	req.Header.Add("ACCESS-KEY", api_key)
-	req.Header.Add("ACCESS-SIGN", signatures)
-	req.Header.Add("ACCESS-TIMESTAMP", server_time)
+	req.Header.Add("ACCESS-KEY", apiKey)
+	req.Header.Add("ACCESS-SIGN", signature)
+	req.Header.Add("ACCESS-TIMESTAMP", serverTime)
 	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("local", "zh-CN")
@@ -122,7 +139,6 @@ func BitgetNewBatchOrder(api_key string, secret_key string, passphrase string, o
 
 	res, err := client.Do(req)
 	if err != nil {
-
 		return "", err
 	}
 	defer res.Body.Close()
@@ -153,6 +169,148 @@ func GenerateBitgetSignature(apiSecret string, apiKey string, passphrase string,
 	return signature
 }
 
-func saveOrdersInDatabase() {
+func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder bitget_websockets.OrderRequest, longOrder bitget_websockets.OrderRequest) ([]*models.Order, error) {
+
+	ordersPayload := []*models.Order{
+		{
+			Email:       v.UserEmail,
+			Symbol:      coinSymbol,
+			MarginCoin:  marginCoin,
+			Size:        shortOrder.Size,
+			Side:        shortOrder.Side,
+			OrderType:   shortOrder.OrderType,
+			Service:     v.Service,
+			QuoteAmount: quoteAmount,
+			Profit:      0.0,
+		},
+		{
+			Email:       v.UserEmail,
+			Symbol:      coinSymbol,
+			MarginCoin:  marginCoin,
+			Size:        longOrder.Size,
+			Side:        longOrder.Side,
+			OrderType:   longOrder.OrderType,
+			Service:     v.Service,
+			QuoteAmount: quoteAmount,
+			Profit:      0.0,
+		},
+	}
+
+	response, err := models.SaveMultipleOrders(db, ordersPayload)
+	if err != nil {
+		fmt.Println("Error in saving orders:", err)
+		return nil, err
+	}
+
+	fmt.Println("Orders saved successfully:", response)
+
+	return ordersPayload, nil
+
+}
+
+func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) (*MarginData, error) {
+	expires := helpers.GetBitgetServerTimeStamp()
+	uri := "/api/mix/v1/position/allPosition?productType=sumcbl"
+
+	serverTime := helpers.GetBitgetServerTimeStamp()
+
+	signature := GenerateBitgetSignature(apiSecret, apiKey, passphrase, "GET", uri, serverTime, "")
+
+	url := fmt.Sprintf("https://api.bitget.com%s", uri)
+	method := "GET"
+
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("ACCESS-KEY", apiKey)
+	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
+	req.Header.Add("ACCESS-TIMESTAMP", expires)
+	req.Header.Add("ACCESS-SIGN", signature)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+
+		return nil, err
+	}
+
+	var accountData MarginDataResponse
+
+	err = json.Unmarshal(body, &accountData)
+	if err != nil {
+		return nil, err
+	}
+
+	var requiredPosition MarginData
+	for _, pos := range accountData.Data {
+
+		if pos.Symbol == coin_pair {
+			requiredPosition = pos
+			break
+		}
+	}
+
+	return &requiredPosition, nil
+}
+
+func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v models.Key, db *gorm.DB, api_key string, secret_key string, passphrase string) {
+	positionsResponse, err := utils.PerformBitgetPositionQuery(api_key, secret_key, passphrase, coinsymbol)
+	if err != nil {
+		fmt.Println("---error getting position data ---", err)
+	}
+
+	var longPos utils.MarginData
+	var shortPos utils.MarginData
+
+	for _, position := range positionsResponse {
+
+		if position.HoldSide == "long" {
+			longPos = position
+
+		} else if position.HoldSide == "short" {
+			shortPos = position
+
+		}
+
+	}
+
+	for _, order := range orders {
+		currentOrderPos := longPos
+
+		if order.Side == "open_short" {
+			currentOrderPos = shortPos
+		}
+
+		userPosition := models.Positions{
+			Symbol:       order.Symbol,
+			Leverage:     fmt.Sprintf("%d", currentOrderPos.Leverage),
+			OpenPrice:    currentOrderPos.AverageOpenPrice,
+			LiqPrice:     currentOrderPos.LiquidationPrice,
+			UnrealizedPl: currentOrderPos.UnrealizedPL,
+			MarkPrice:    currentOrderPos.MarketPrice,
+			Side:         order.Side,
+			Size:         order.Size,
+			Margin:       currentOrderPos.Margin,
+			UserEmail:    v.UserEmail,
+			Status:       "opened",
+			Exchange:     "bitget",
+		}
+
+		posResponse, createErr := userPosition.UpdateOrCreatePosition(db)
+
+		if createErr != nil {
+			fmt.Println(userPosition, "---- error creating new position in database ----", createErr)
+			return
+		}
+		fmt.Println("---- position saved successfully---", posResponse)
+
+	}
 
 }

@@ -1,0 +1,42 @@
+name: Deploy to Staging Server
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  deploy:
+    
+    name: Deploying to Staging Server
+    runs-on: [ self-hosted, bidbox-vm ]
+    environment: staging
+    env:
+      CONTAINER_NAME: bidbox-bitgetMS-service
+      IMAGE_NAME_TAG: bidbox-bitgetms:latest
+      HOST_PORT: 8005
+      CONTAINER_PORT: 8080
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          clean: False
+
+      - name: Building and Assigning Tag to image
+        run: |
+          docker build -t $IMAGE_NAME_TAG .
+      
+      - name: Removing old Container if exits
+        run: |
+          docker stop $CONTAINER_NAME || true && docker rm $CONTAINER_NAME || true
+      
+      - name: Starting Docker Container
+        run: |
+          docker run -d -p $HOST_PORT:$CONTAINER_PORT --restart unless-stopped --name $CONTAINER_NAME  $IMAGE_NAME_TAG
+      
+      - name: View Docker status
+        run: |
+          docker ps
+      
+      - name: Cleaning Server
+        run: |
+          echo y | docker system prune

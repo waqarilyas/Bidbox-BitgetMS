@@ -1,7 +1,6 @@
 package bitget_websockets
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -13,26 +12,20 @@ import (
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
 )
 
-const (
-	PERCENT_CHANGE = 5
-)
-
 func (s *Server) WebsocketTest() {
 	var paramsList []Subscription
 	coinPair := models.CoinPair{}
 
 	coinPairs, err := coinPair.GetAllCoins(s.DB)
 	if err != nil {
-		fmt.Println("---- error fetching coins ----", err)
 		return
 	}
 
 	for _, coinPair := range *coinPairs {
 		result := strings.ReplaceAll(coinPair.Coin, "/", "")
 		eventString := strings.ToUpper(result)
-
 		paramsList = append(paramsList, Subscription{
-			InstType: "SP",
+			InstType: "mc",
 			Channel:  "ticker",
 			InstID:   eventString,
 		})
@@ -42,6 +35,8 @@ func (s *Server) WebsocketTest() {
 	signal.Notify(interrupt, os.Interrupt)
 
 	cache := &Cache{}
+
+	pingTicker := time.NewTicker(20 * time.Second)
 
 	go func() {
 		for {
@@ -73,7 +68,7 @@ func (s *Server) WebsocketTest() {
 			continue
 		}
 
-		go handleWebSocketMessages(conn)
+		go HandleWebSocketMessages(conn, cache, s.DB)
 
 		select {
 		case <-interrupt:
@@ -84,6 +79,15 @@ func (s *Server) WebsocketTest() {
 			}
 			time.Sleep(1 * time.Second)
 			return
+		case <-pingTicker.C:
+			// Send ping message
+			err := sendPingMessage(conn)
+			if err != nil {
+				log.Println("Ping message sending error:", err)
+				conn.Close()
+				time.Sleep(5 * time.Second)
+				break
+			}
 		}
 	}
 }
@@ -111,8 +115,6 @@ func subscribeToMarketEvents(conn *websocket.Conn, paramsList []Subscription) er
 		Args: paramsList,
 	}
 
-	fmt.Println("🚀 ~ file: bitget.go:142 ~ funcsubscribeToMarketEvents ~ subscribeRequest:", subscribeRequest)
-
 	err := conn.WriteJSON(subscribeRequest)
 	if err != nil {
 		fmt.Println("🚀 ~ file: bitget.go:177 ~ funcsubscribeToMarketEvents ~ err:", err)
@@ -122,26 +124,20 @@ func subscribeToMarketEvents(conn *websocket.Conn, paramsList []Subscription) er
 	return nil
 }
 
-func handleWebSocketMessages(conn *websocket.Conn) {
-	defer conn.Close()
+func sendPingMessage(conn *websocket.Conn) error {
 
-	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Println("WebSocket message receiving error:", err)
-			return
-		}
-
-		var eventData Snapshot
-
-		err = json.Unmarshal(message, &eventData)
-		if err != nil {
-			log.Println("WebSocket message parsing error:", err)
-			continue
-		}
-
-		fmt.Println("---- event data ---", eventData)
-
-		// go handleMarketUpdate(db, cache, eventData.Symbol, eventData.MarketPrice)
+	pingMessage := struct {
+		Op   string   `json:"op"`
+		Args []string `json:"args"`
+	}{
+		Op:   "ping",
+		Args: []string{"ping"},
 	}
+
+	err := conn.WriteJSON(pingMessage)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

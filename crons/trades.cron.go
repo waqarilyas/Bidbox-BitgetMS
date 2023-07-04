@@ -48,8 +48,6 @@ func (server *TradesCron) Run() {
 		return
 	}
 
-	fmt.Println("----- coin pairs ----", coinPairs)
-
 	for _, v := range *keys {
 		wg.Add(1)
 		go func(v models.Key) {

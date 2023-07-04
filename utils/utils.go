@@ -255,3 +255,8 @@ func ConvertStrToFloat32(val string) float32 {
 
 	return 0.0
 }
+
+func SelectRandomElement(strings []string) string {
+	index := rand.Intn(len(strings))
+	return strings[index]
+}

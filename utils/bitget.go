@@ -38,7 +38,7 @@ type MarginDataResponse struct {
 	Data        []MarginData `json:"data"`
 }
 
-func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) ([]MarginData, error) {
+func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) ([]MarginData, []MarginData, error) {
 	expires := helpers.GetBitgetServerTimeStamp()
 	uri := "/api/mix/v1/position/allPosition?productType=sumcbl"
 	signature := GenerateBitgetSignature(apiSecret, "GET", uri, expires)
@@ -48,7 +48,7 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	req.Header.Add("ACCESS-KEY", apiKey)
@@ -58,21 +58,21 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	var accountData MarginDataResponse
 
 	err = json.Unmarshal(body, &accountData)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var requiredPosition []MarginData
@@ -83,5 +83,5 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 		}
 	}
 
-	return requiredPosition, nil
+	return requiredPosition, accountData.Data, nil
 }

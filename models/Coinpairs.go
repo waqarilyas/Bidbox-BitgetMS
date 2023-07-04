@@ -16,6 +16,15 @@ func (cp *CoinPair) GetAllCoins(db *gorm.DB) (*[]CoinPair, error) {
 	return &Coins, nil
 }
 
+func (cp *CoinPair) GetAllActiveCoins(db *gorm.DB) (*[]CoinPair, error) {
+	Coins := []CoinPair{}
+	err := db.Debug().Model(&CoinPair{}).Where("active = ?", true).Limit(100).Find(&Coins).Error
+	if err != nil {
+		return &[]CoinPair{}, err
+	}
+	return &Coins, nil
+}
+
 func (cp *CoinPair) SaveCoinPair(db *gorm.DB) (*CoinPair, error) {
 	err := db.Debug().Create(cp).Error
 	if err != nil {

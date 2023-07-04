@@ -44,8 +44,7 @@ func Run() {
 	tradesCron := crons_service.TradesCron{}
 	tradesCron.DB = server.DB
 
-	tradesCron.Run()
-	// c.AddFunc("@every 1m", tradesCron.Run) // Run Cron After Every One Minute
+	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every One Minute
 	// ... add additional crons here
 
 	c.Start()

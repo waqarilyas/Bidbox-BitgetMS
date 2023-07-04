@@ -12,6 +12,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/jinzhu/gorm"
@@ -39,6 +40,16 @@ func (server *TradesCron) Run() {
 		return
 	}
 
+	coinPair := models.CoinPair{}
+
+	coinPairs, err := coinPair.GetAllActiveCoins(server.DB)
+	if err != nil {
+		fmt.Println("---- error fetching coins ----", err)
+		return
+	}
+
+	fmt.Println("----- coin pairs ----", coinPairs)
+
 	for _, v := range *keys {
 		wg.Add(1)
 		go func(v models.Key) {
@@ -51,18 +62,51 @@ func (server *TradesCron) Run() {
 			}
 
 			hedgeOrderAmount := float64(v.TradeAmount) * 0.08 / float64(c.Positions)
-			placeBitgetOrder(&v, hedgeOrderAmount, server.DB)
+			go placeBitgetOrder(&v, hedgeOrderAmount, server.DB, coinPairs)
 		}(v)
 	}
 
 	wg.Wait()
 }
 
-func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB) {
-	if v.UserEmail != "kmtester@yopmail.com" {
-		fmt.Println("---- user is not km tester ---")
-		return
+func GetTradeEligibleCoinSymbol(apiKey string, secretKey string, passphrase string, coinPairs *[]models.CoinPair) (string, error) {
+	_, userAllOpenPositions, openPosError := utils.PerformBitgetPositionQuery(apiKey, secretKey, passphrase, "")
+	if openPosError != nil {
+		return "", openPosError
 	}
+
+	var eligibleCoinSymbols []string
+
+	for _, pair := range *coinPairs {
+		vCoinSymbol := strings.Split(pair.Coin, "/")
+
+		pairSymbol := "S" + vCoinSymbol[0] + "S" + vCoinSymbol[1] + "_SUMCBL"
+		matched := false
+		for _, pos := range userAllOpenPositions {
+
+			if pos.Symbol == pairSymbol && pos.Available != "0" {
+				matched = true
+				break
+			}
+		}
+
+		if !matched {
+			eligibleCoinSymbols = append(eligibleCoinSymbols, pairSymbol)
+		}
+
+	}
+
+	if len(eligibleCoinSymbols) == 0 {
+		return "", errors.New("no eligible trade symbol foiund")
+	}
+
+	tradePair := utils.SelectRandomElement(eligibleCoinSymbols)
+
+	return tradePair, nil
+
+}
+
+func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]models.CoinPair) {
 
 	apiKey, secretKey, passphrase, err := helpers.DecryptAllKeys(v.ApiKey, v.SecretKey, v.Passphrase, "bitget")
 	if err != nil {
@@ -70,7 +114,13 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB) {
 		return
 	}
 
-	orderSize, _, err := utils.GetSize("SETHSUSDT_SUMCBL", amount)
+	tradeSymbol, tradeSymbolError := GetTradeEligibleCoinSymbol(apiKey, secretKey, passphrase, coinPairs)
+	if tradeSymbolError != nil {
+		fmt.Println("---- no eligible trade symbol found ----", tradeSymbolError)
+		return
+	}
+
+	orderSize, _, err := utils.GetSize(tradeSymbol, amount)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -89,7 +139,7 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB) {
 	}
 
 	batchOrderRequest := bitget_websockets.BitgetBatchOrderRequest{
-		Symbol:        "SETHSUSDT_SUMCBL",
+		Symbol:        tradeSymbol,
 		MarginCoin:    "SUSDT",
 		OrderDataList: []bitget_websockets.OrderRequest{longOrder, shortOrder},
 	}
@@ -100,13 +150,13 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB) {
 		return
 	}
 
-	orders, err := SaveOrdersInDatabase(db, v, "SETHSUSDT_SUMCBL", amount, "SUSDT", shortOrder, longOrder)
+	orders, err := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrder, longOrder)
 
 	if err != nil {
 		fmt.Println("----  error saving orders ----", err)
 	}
 
-	fetchAndUpdateBitgetPosition(orders, "SETHSUSDT_SUMCBL", *v, db, apiKey, secretKey, passphrase)
+	fetchAndUpdateBitgetPosition(orders, tradeSymbol, *v, db, apiKey, secretKey, passphrase)
 }
 
 func BitgetNewBatchOrder(apiKey string, secretKey string, passphrase string, order *bitget_websockets.BitgetBatchOrderRequest) (string, error) {
@@ -208,60 +258,8 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 
 }
 
-func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) (*MarginData, error) {
-	expires := helpers.GetBitgetServerTimeStamp()
-	uri := "/api/mix/v1/position/allPosition?productType=sumcbl"
-
-	serverTime := helpers.GetBitgetServerTimeStamp()
-
-	signature := GenerateBitgetSignature(apiSecret, apiKey, passphrase, "GET", uri, serverTime, "")
-
-	url := fmt.Sprintf("https://api.bitget.com%s", uri)
-	method := "GET"
-
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("ACCESS-KEY", apiKey)
-	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
-	req.Header.Add("ACCESS-TIMESTAMP", expires)
-	req.Header.Add("ACCESS-SIGN", signature)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-
-		return nil, err
-	}
-
-	var accountData MarginDataResponse
-
-	err = json.Unmarshal(body, &accountData)
-	if err != nil {
-		return nil, err
-	}
-
-	var requiredPosition MarginData
-	for _, pos := range accountData.Data {
-
-		if pos.Symbol == coin_pair {
-			requiredPosition = pos
-			break
-		}
-	}
-
-	return &requiredPosition, nil
-}
-
 func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v models.Key, db *gorm.DB, api_key string, secret_key string, passphrase string) {
-	positionsResponse, err := utils.PerformBitgetPositionQuery(api_key, secret_key, passphrase, coinsymbol)
+	positionsResponse, _, err := utils.PerformBitgetPositionQuery(api_key, secret_key, passphrase, coinsymbol)
 	if err != nil {
 		fmt.Println("---error getting position data ---", err)
 	}
@@ -270,15 +268,11 @@ func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v m
 	var shortPos utils.MarginData
 
 	for _, position := range positionsResponse {
-
 		if position.HoldSide == "long" {
 			longPos = position
-
 		} else if position.HoldSide == "short" {
 			shortPos = position
-
 		}
-
 	}
 
 	for _, order := range orders {

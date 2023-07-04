@@ -27,21 +27,22 @@ type Subscription struct {
 }
 
 type SnapshotData struct {
-	InstID      string `json:"instId"`
-	Last        string `json:"last"`
-	Open24h     string `json:"open24h"`
-	High24h     string `json:"high24h"`
-	Low24h      string `json:"low24h"`
-	BestBid     string `json:"bestBid"`
-	BestAsk     string `json:"bestAsk"`
-	BaseVolume  string `json:"baseVolume"`
-	QuoteVolume string `json:"quoteVolume"`
-	Timestamp   int64  `json:"ts"`
-	LabelID     int    `json:"labelId"`
-	OpenUtc     string `json:"openUtc"`
-	ChangeUTC   string `json:"chgUTC"`
-	BidSize     string `json:"bidSz"`
-	AskSize     string `json:"askSz"`
+	// InstID      string `json:"instId"`
+	// Last        string `json:"last"`
+	// Open24h     string `json:"open24h"`
+	// High24h     string `json:"high24h"`
+	// Low24h      string `json:"low24h"`
+	// BestBid     string `json:"bestBid"`
+	// BestAsk     string `json:"bestAsk"`
+	// BaseVolume  string `json:"baseVolume"`
+	// QuoteVolume string `json:"quoteVolume"`
+	// Timestamp   int64  `json:"ts"`
+	// LabelID     int    `json:"labelId"`
+	// OpenUtc     string `json:"openUtc"`
+	// ChangeUTC string `json:"chgUTC"`
+	// BidSize     string `json:"bidSz"`
+	// AskSize     string `json:"askSz"`
+	MarkPrice string `json:"markPrice"`
 }
 
 type Snapshot struct {

@@ -84,3 +84,12 @@ func (u *Positions) GetUserOpenPositionsByExchange(db *gorm.DB, exchange string,
 	}
 	return &positions, nil
 }
+
+func (u *Positions) GetOpenPositionsByExchangeAndSymbol(db *gorm.DB, exchange string, coinSymbol string) (*[]Positions, error) {
+	positions := []Positions{}
+	err := db.Model(&Positions{}).Where("exchange = ? AND status = ? AND symbol = ?", exchange, "opened", coinSymbol).Find(&positions).Error
+	if err != nil {
+		return &[]Positions{}, err
+	}
+	return &positions, nil
+}

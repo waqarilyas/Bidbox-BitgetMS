@@ -260,3 +260,11 @@ func SelectRandomElement(strings []string) string {
 	index := rand.Intn(len(strings))
 	return strings[index]
 }
+
+func CalculateLongPosFloatingPnL(entryPrice float64, markPrice float64, quantity float64) float64 {
+	return (markPrice - entryPrice) * quantity
+}
+
+func CalculateShortPosFloatingPnL(entryPrice float64, markPrice float64, quantity float64) float64 {
+	return (entryPrice - markPrice) * quantity
+}

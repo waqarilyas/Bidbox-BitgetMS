@@ -52,6 +52,11 @@ func (server *TradesCron) Run() {
 		wg.Add(1)
 		go func(v models.Key) {
 			defer wg.Done()
+
+			if v.UserEmail != "kmtester@yopmail.com" {
+				return
+			}
+
 			val := int(math.Floor(float64(v.TradeAmount)/100.0) * 100)
 			cond := models.Conditions{}
 			c, err := cond.FindCondition(server.DB, val)
@@ -148,13 +153,17 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 		return
 	}
 
-	orders, err := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrder, longOrder)
+	dbPositions, posError := fetchAndUpdateBitgetPosition(tradeSymbol, *v, db, apiKey, secretKey, passphrase)
+	if posError != nil {
+		fmt.Println("--- unable to update positions in database ---")
+	}
 
-	if err != nil {
+	_, orderErr := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrder, longOrder, dbPositions)
+
+	if orderErr != nil {
 		fmt.Println("----  error saving orders ----", err)
 	}
 
-	fetchAndUpdateBitgetPosition(orders, tradeSymbol, *v, db, apiKey, secretKey, passphrase)
 }
 
 func BitgetNewBatchOrder(apiKey string, secretKey string, passphrase string, order *bitget_websockets.BitgetBatchOrderRequest) (string, error) {
@@ -217,7 +226,19 @@ func GenerateBitgetSignature(apiSecret string, apiKey string, passphrase string,
 	return signature
 }
 
-func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder bitget_websockets.OrderRequest, longOrder bitget_websockets.OrderRequest) ([]*models.Order, error) {
+func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder bitget_websockets.OrderRequest, longOrder bitget_websockets.OrderRequest, positions []models.Positions) ([]*models.Order, error) {
+	var longPos models.Positions
+	var shortPos models.Positions
+
+	for _, position := range positions {
+
+		if position.Side == "long" {
+			longPos = position
+		} else if position.Side == "short" {
+			shortPos = position
+		}
+
+	}
 
 	ordersPayload := []*models.Order{
 		{
@@ -230,6 +251,8 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			Service:     v.Service,
 			QuoteAmount: quoteAmount,
 			Profit:      0.0,
+			PositionId:  shortPos.Id,
+			OrderPrice:  shortPos.OpenPrice,
 		},
 		{
 			Email:       v.UserEmail,
@@ -241,6 +264,8 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			Service:     v.Service,
 			QuoteAmount: quoteAmount,
 			Profit:      0.0,
+			PositionId:  longPos.Id,
+			OrderPrice:  longPos.OpenPrice,
 		},
 	}
 
@@ -256,7 +281,7 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 
 }
 
-func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v models.Key, db *gorm.DB, api_key string, secret_key string, passphrase string) {
+func fetchAndUpdateBitgetPosition(coinsymbol string, v models.Key, db *gorm.DB, api_key string, secret_key string, passphrase string) ([]models.Positions, error) {
 	positionsResponse, _, err := utils.PerformBitgetPositionQuery(api_key, secret_key, passphrase, coinsymbol)
 	if err != nil {
 		fmt.Println("---error getting position data ---", err)
@@ -264,6 +289,8 @@ func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v m
 
 	var longPos utils.MarginData
 	var shortPos utils.MarginData
+
+	var dbPositions []models.Positions
 
 	for _, position := range positionsResponse {
 		if position.HoldSide == "long" {
@@ -273,38 +300,42 @@ func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v m
 		}
 	}
 
-	for _, order := range orders {
+	for _, pos := range positionsResponse {
 		side := "long"
 		currentOrderPos := longPos
 
-		if order.Side == "open_short" {
+		if pos.HoldSide == "short" {
 			currentOrderPos = shortPos
 			side = "short"
 		}
 
 		userPosition := models.Positions{
-			Symbol:       order.Symbol,
-			Leverage:     fmt.Sprintf("%d", currentOrderPos.Leverage),
-			OpenPrice:    currentOrderPos.AverageOpenPrice,
-			LiqPrice:     currentOrderPos.LiquidationPrice,
-			UnrealizedPl: currentOrderPos.UnrealizedPL,
-			MarkPrice:    currentOrderPos.MarketPrice,
-			Side:         side,
-			Size:         order.Size,
-			Margin:       currentOrderPos.Margin,
-			UserEmail:    v.UserEmail,
-			Status:       "opened",
-			Exchange:     "bitget",
+			Symbol:         pos.Symbol,
+			Leverage:       fmt.Sprintf("%d", currentOrderPos.Leverage),
+			OpenPrice:      currentOrderPos.AverageOpenPrice,
+			LiqPrice:       currentOrderPos.LiquidationPrice,
+			UnrealizedPl:   currentOrderPos.UnrealizedPL,
+			MarkPrice:      currentOrderPos.MarketPrice,
+			Side:           side,
+			Size:           currentOrderPos.Available,
+			Margin:         currentOrderPos.Margin,
+			UserEmail:      v.UserEmail,
+			Status:         "opened",
+			Exchange:       "bitget",
+			FirstBuyAmount: pos.Available,
 		}
 
 		posResponse, createErr := userPosition.UpdateOrCreatePosition(db)
+		dbPositions = append(dbPositions, *posResponse)
 
 		if createErr != nil {
 			fmt.Println(userPosition, "---- error creating new position in database ----", createErr)
-			return
+			return nil, createErr
 		}
 		fmt.Println("---- position saved successfully---", posResponse)
 
 	}
+
+	return dbPositions, nil
 
 }

@@ -28,6 +28,7 @@ type Positions struct {
 	OrderId         string
 	Layer           int     `json:"layer"`
 	TotalProfit     float64 `json:"total_profit"`
+	FirstBuyAmount  string  `json:"first_buy_amount"`
 }
 
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {
@@ -112,4 +113,14 @@ func (u *Positions) GetGroupedOpenPositionsByExchangeAndCoinSymbol(db *gorm.DB, 
 	}
 
 	return groupedPositions, nil
+}
+
+func UpdatePositionByID(db *gorm.DB, positionID int, newPositionData Positions) error {
+	err := db.Model(&Positions{}).
+		Where("id = ?", positionID).
+		Updates(newPositionData).Error
+	if err != nil {
+		return err
+	}
+	return nil
 }

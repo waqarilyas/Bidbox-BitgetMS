@@ -145,6 +145,8 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions) {
 
 	}
 
+	fmt.Println("🚀 ~ file: bitgetAveraging.go:136 ~ funcHandlePositionsOnTicker ~ pnl:", pnl)
+
 }
 
 func GetProfitPosition(longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {

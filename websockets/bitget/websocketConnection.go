@@ -34,23 +34,21 @@ func (s *Server) WebsocketTest() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	cache := &Cache{}
-
 	pingTicker := time.NewTicker(20 * time.Second)
 
-	go func() {
-		for {
-			position := models.Positions{}
-			positions, err := position.GetOpenPositionsByExchange(s.DB, "bitget")
-			if err != nil {
-				log.Println("Error fetching positions:", err)
-			} else {
-				cache.Positions = *positions
-				log.Println("Positions cache updated successfully.")
-			}
-			time.Sleep(10 * time.Second)
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		position := models.Positions{}
+	// 		positions, err := position.GetOpenPositionsByExchange(s.DB, "bitget")
+	// 		if err != nil {
+	// 			log.Println("Error fetching positions:", err)
+	// 		} else {
+	// 			cache.Positions = *positions
+	// 			log.Println("Positions cache updated successfully.")
+	// 		}
+	// 		time.Sleep(10 * time.Second)
+	// 	}
+	// }()
 
 	for {
 		conn, err := connectWebSocket()
@@ -68,7 +66,7 @@ func (s *Server) WebsocketTest() {
 			continue
 		}
 
-		go HandleWebSocketMessages(conn, cache, s.DB)
+		go HandleWebSocketMessages(conn, s.DB)
 
 		select {
 		case <-interrupt:

@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/jinzhu/gorm"
+
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
 	"github.com/kryptomind/bidboxapi/bitgetms/utils"
 )
@@ -22,7 +24,7 @@ const (
 	PERCENTAGE_PROFIT = 3.0
 )
 
-func HandleWebSocketMessages(conn *websocket.Conn, cache *Cache, db *gorm.DB) {
+func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 	defer conn.Close()
 
 	// tickerQueue := make(chan Snapshot)
@@ -80,63 +82,151 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 	tickerData := ticker.Data
 
-	if len(tickerData) > 0 {
-		position := models.Positions{}
-		positions, err := position.GetOpenPositionsByExchange(db, "bitget")
-		if err != nil {
-			fmt.Println("---- unable to handle coin price event -----", err)
-		}
-
-		for _, position := range *positions {
-			HandlePositionOnRateUpdate(tickerData[0], position)
-		}
+	if len(tickerData) == 0 {
+		return
 	}
 
-}
+	splitted := strings.Split(ticker.Arg.InstID, "USDT")
+	formattedCoinsymbol := "S" + splitted[0] + "SUSDT_SUMCBL"
 
-func HandlePositionOnRateUpdate(ticker SnapshotData, position models.Positions) {
-
-	// compare position entry price with current market price
-	floatMarkPrice, err := strconv.ParseFloat(ticker.MarkPrice, 64)
+	floatMarkPrice, err := strconv.ParseFloat(tickerData[0].MarkPrice, 64)
 	if err != nil {
 		fmt.Println("-- error converting ticker mark to float")
 		return
 	}
 
+	if len(tickerData) > 0 {
+		position := models.Positions{}
+		positions, err := position.GetGroupedOpenPositionsByExchangeAndCoinSymbol(db, "bitget", formattedCoinsymbol)
+		if err != nil {
+			fmt.Println("---- unable to handle coin price event -----", err)
+		}
+
+		if len(positions) > 0 {
+
+			for _, position := range positions {
+				HandlePositionsOnTicker(floatMarkPrice, position)
+			}
+		}
+	}
+
+}
+
+func HandlePositionsOnTicker(markPrice float64, positions []models.Positions) {
+	if len(positions) != 2 {
+		return
+	}
+
+	var longPos models.Positions
+	var shortPos models.Positions
+
+	for _, pos := range positions {
+
+		if pos.Side == "long" {
+			longPos = pos
+		} else if pos.Side == "short" {
+			shortPos = pos
+		}
+	}
+
+	fmt.Println("🚀 ~ file: bitgetAveraging.go:119 ~ funcHandlePositionsOnTicker ~ longPos:", longPos)
+	fmt.Println("🚀 ~ file: bitgetAveraging.go:121 ~ funcHandlePositionsOnTicker ~ shortPos:", shortPos)
+
+	isLongInProfit, pnl, error := GetProfitPosition(longPos, shortPos, markPrice)
+
+	if error != nil {
+		fmt.Println("--- unable to get position profit ---", error)
+		return
+	}
+
+	if isLongInProfit {
+		// handle case in which long pos is in profit
+	} else {
+
+	}
+
+}
+
+func GetProfitPosition(longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {
+	shortPnl, shortError := GetPosPnl(shortPos, markPrice)
+	if shortError != nil {
+		return false, 0.0, shortError
+	}
+
+	longPnl, longError := GetPosPnl(longPos, markPrice)
+	if longError != nil {
+		return false, 0.0, longError
+	}
+
+	if longPnl > shortPnl {
+		return true, longPnl, nil
+	} else {
+		return false, shortPnl, nil
+	}
+
+}
+
+func GetPosPnl(position models.Positions, markPrice float64) (float64, error) {
 	floatPosEntryPrice, error := strconv.ParseFloat(position.OpenPrice, 64)
 	if error != nil {
 		fmt.Println("-- error converting position entry price to float")
+		return 0.0, error
 	}
 
 	floatPosSize, error := strconv.ParseFloat(position.OpenPrice, 64)
 	if error != nil {
 		fmt.Println("-- error converting position entry price to float")
+		return 0.0, error
+
 	}
+
+	var positionPnl float64
 
 	if position.Side == "long" {
-		positionPnl := utils.CalculateLongPosFloatingPnL(floatPosEntryPrice, floatMarkPrice, floatPosSize)
-		handleLongPosition(position, positionPnl)
-	} else if position.Side == "short" {
-		positionPnl := utils.CalculateShortPosFloatingPnL(floatPosEntryPrice, floatMarkPrice, floatPosSize)
-		handleShortPosition(position, positionPnl)
+		positionPnl = utils.CalculateLongPosFloatingPnL(floatPosEntryPrice, markPrice, floatPosSize)
+	} else {
+		positionPnl = utils.CalculateShortPosFloatingPnL(floatPosEntryPrice, markPrice, floatPosSize)
 	}
+
+	return positionPnl, nil
 
 }
 
-func handleLongPosition(position models.Positions, pnl float64) {
-	fmt.Println("🚀 ~ file: bitgetAveraging.go:130 ~ funchandleLongPosition ~ pnl:", pnl)
+// func HandlePositionOnRateUpdate(ticker SnapshotData, position models.Positions, markProce float64) {
 
-	if pnl > PERCENTAGE_PROFIT {
-		//handle trade closing logic here
-	}
+// 	floatPosEntryPrice, error := strconv.ParseFloat(position.OpenPrice, 64)
+// 	if error != nil {
+// 		fmt.Println("-- error converting position entry price to float")
+// 	}
 
-}
+// 	floatPosSize, error := strconv.ParseFloat(position.OpenPrice, 64)
+// 	if error != nil {
+// 		fmt.Println("-- error converting position entry price to float")
+// 	}
 
-func handleShortPosition(position models.Positions, pnl float64) {
-	fmt.Println("🚀 ~ file: bitgetAveraging.go:135 ~ funchandleShortPosition ~ pnl:", pnl)
+// 	// if position.Side == "long" {
+// 	// 	handleLongPosition(position, positionPnl)
+// 	// } else if position.Side == "short" {
+// 	// 	positionPnl := utils.CalculateShortPosFloatingPnL(floatPosEntryPrice, floatMarkPrice, floatPosSize)
+// 	// 	handleShortPosition(position, positionPnl)
+// 	// }
 
-	if pnl > PERCENTAGE_PROFIT {
-		//handle trade closing logic here
+// }
 
-	}
-}
+// func handleLongPosition(position models.Positions, pnl float64) {
+// 	fmt.Println("🚀 ~ file: bitgetAveraging.go:130 ~ funchandleLongPosition ~ pnl:", pnl)
+
+// 	if pnl > PERCENTAGE_PROFIT {
+// 		//handle trade closing logic here
+// 	}
+
+// }
+
+// func handleShortPosition(position models.Positions, pnl float64) {
+// 	fmt.Println("🚀 ~ file: bitgetAveraging.go:135 ~ funchandleShortPosition ~ pnl:", pnl)
+
+// 	if pnl > PERCENTAGE_PROFIT {
+// 		//handle trade closing logic here
+
+// 	}
+// }

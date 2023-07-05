@@ -106,7 +106,6 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 		if len(positions) > 0 {
 
 			for userEmail, position := range positions {
-				fmt.Println("---- user email ---", userEmail)
 
 				if userEmail != "kmtester@yopmail.com" {
 					fmt.Println("---- user is not km tester ----")
@@ -176,11 +175,16 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 
 		}
 
-		positionProfitUSD = openPriceFloat - markPrice
+		positionProfitUSD = markPrice - openPriceFloat
 
 		// close Position in Profit
 		_, closePosError := CloseUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
 		if closePosError != nil {
+			return
+		}
+
+		_, openPosError := OpenUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
+		if openPosError != nil {
 			return
 		}
 
@@ -205,7 +209,7 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 
 		}
 
-		positionProfitUSD = markPrice - openPriceFloat
+		positionProfitUSD = openPriceFloat - markPrice
 
 		_, closePosError := CloseUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
 		if closePosError != nil {
@@ -265,6 +269,57 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 		Size:        position.Size,
 		Side:        orderSide,
 		OrderType:   closeOrderPayload.OrderType,
+		Service:     position.Exchange,
+		QuoteAmount: quoteAmount,
+		Profit:      0.0,
+	}
+
+	_, saveErr := dbOrder.SaveOrder(db)
+	if saveErr != nil {
+		fmt.Println("---- unabel to save order in database ---")
+	}
+
+	return "successfully closed position", nil
+}
+
+func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
+	orderSide := "open_long"
+	if position.Side == "short" {
+		orderSide = "open_short"
+	}
+
+	openOrderPayload := utils.NormalOrderRequest{
+		MarginCoin: "SUSDT",
+		Symbol:     position.Symbol,
+		Size:       position.Size,
+		Side:       orderSide,
+		OrderType:  "market",
+	}
+
+	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, openOrderPayload)
+	if closePosError != nil {
+		fmt.Println(" --- unable to close position ---")
+		fmt.Println(" --- user email ---", position.UserEmail)
+		fmt.Println(" --- coinSymbol ---", position.Symbol)
+		return "", closePosError
+	}
+
+	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
+
+	floatSize, convErr := strconv.ParseFloat(openOrderPayload.Size, 64)
+	if convErr != nil {
+		fmt.Println("--unable to convert size to float--")
+	}
+
+	quoteAmount := floatSize * markPrice
+
+	dbOrder := models.Order{
+		Email:       position.UserEmail,
+		Symbol:      position.Symbol,
+		MarginCoin:  openOrderPayload.MarginCoin,
+		Size:        position.Size,
+		Side:        orderSide,
+		OrderType:   openOrderPayload.OrderType,
 		Service:     position.Exchange,
 		QuoteAmount: quoteAmount,
 		Profit:      0.0,

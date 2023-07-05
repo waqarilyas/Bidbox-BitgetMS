@@ -21,7 +21,7 @@ type Ticker struct {
 }
 
 const (
-	PERCENTAGE_PROFIT = 0.5
+	PERCENTAGE_PROFIT = 1
 	ALLOWED_LAYERS    = 2
 )
 
@@ -172,7 +172,6 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 		if convErr != nil {
 			fmt.Println("--- unable to convert open price to float ----", convErr)
 			return
-
 		}
 
 		positionProfitUSD = markPrice - openPriceFloat
@@ -277,6 +276,8 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 		Service:     position.Exchange,
 		QuoteAmount: quoteAmount,
 		Profit:      0.0,
+		PositionId:  position.Id,
+		OrderPrice:  fmt.Sprintf("%f", markPrice),
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)
@@ -328,6 +329,8 @@ func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, sec
 		Service:     position.Exchange,
 		QuoteAmount: quoteAmount,
 		Profit:      0.0,
+		PositionId:  position.Id,
+		OrderPrice:  fmt.Sprintf("%f", markPrice),
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)
@@ -379,6 +382,8 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		Service:     position.Exchange,
 		QuoteAmount: quoteAmount,
 		Profit:      0.0,
+		PositionId:  position.Id,
+		OrderPrice:  fmt.Sprintf("%f", markPrice),
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)

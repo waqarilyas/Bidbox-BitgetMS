@@ -44,27 +44,28 @@ func Run() {
 	tradesCron := crons_service.TradesCron{}
 	tradesCron.DB = server.DB
 
-	// c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
+	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
-	// tradesCron.Run()
 	c.Start()
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
-	bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
-		Action: "snapshot",
-		Arg: bitget_websockets.Subscription{
-			InstType: "mc",
-			Channel:  "ticker",
-			InstID:   "BTCUSDT",
-		},
-		Data: []bitget_websockets.SnapshotData{
-			{
-				MarkPrice: "31800",
-			},
-		},
-	})
+	bitget_WS.WebsocketTest()
+
+	// bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
+	// 	Action: "snapshot",
+	// 	Arg: bitget_websockets.Subscription{
+	// 		InstType: "mc",
+	// 		Channel:  "ticker",
+	// 		InstID:   "BTCUSDT",
+	// 	},
+	// 	Data: []bitget_websockets.SnapshotData{
+	// 		{
+	// 			MarkPrice: "31800",
+	// 		},
+	// 	},
+	// })
 	server.Run(":8080")
 }
 

@@ -8,8 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/kryptomind/bidboxapi/AccountsService/api/models"
 	"github.com/kryptomind/bidboxapi/bitgetms/helpers"
+	"github.com/kryptomind/bidboxapi/bitgetms/models"
 )
 
 type MarginData struct {
@@ -96,7 +96,7 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 	return requiredPosition, accountData.Data, nil
 }
 
-func PlaceClosePositionOrder(apiKey string, secretKey string, passphrase string, position models.Position, marginCoin string) (string, error) {
+func PlaceClosePositionOrder(apiKey string, secretKey string, passphrase string, position models.Positions, marginCoin string) (string, error) {
 
 	orderSide := "close_long"
 

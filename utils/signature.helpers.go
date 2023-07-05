@@ -10,11 +10,26 @@ import (
 	"strings"
 )
 
-func GenerateBitgetSignature(apiSecret string, method string, uri string, timestamp string) string {
-	message := fmt.Sprintf("%s%s%s", timestamp, method, uri)
+// func GenerateBitgetSignature(apiSecret string, method string, uri string, timestamp string) string {
+// 	message := fmt.Sprintf("%s%s%s", timestamp, method, uri)
+// 	hmac := hmac.New(sha256.New, []byte(apiSecret))
+// 	hmac.Write([]byte(message))
+// 	signature := base64.StdEncoding.EncodeToString(hmac.Sum(nil))
+// 	return signature
+// }
+
+func GenerateBitgetSignature(apiSecret string, apiKey string, passphrase string, method string, uri string, timestamp string, requestBody string) string {
+	message := ""
+	if method == "GET" {
+		message = fmt.Sprintf("%s%s%s", timestamp, method, uri)
+	} else if method == "POST" {
+		message = fmt.Sprintf("%s%s%s%s", timestamp, method, uri, requestBody)
+	}
+
 	hmac := hmac.New(sha256.New, []byte(apiSecret))
 	hmac.Write([]byte(message))
 	signature := base64.StdEncoding.EncodeToString(hmac.Sum(nil))
+
 	return signature
 }
 

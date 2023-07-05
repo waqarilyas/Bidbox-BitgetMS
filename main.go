@@ -47,6 +47,7 @@ func Run() {
 	// c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
+	// tradesCron.Run()
 	c.Start()
 
 	// Bitget Websocket Connection Logic

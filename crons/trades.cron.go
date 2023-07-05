@@ -283,18 +283,19 @@ func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v m
 		}
 
 		userPosition := models.Positions{
-			Symbol:       order.Symbol,
-			Leverage:     fmt.Sprintf("%d", currentOrderPos.Leverage),
-			OpenPrice:    currentOrderPos.AverageOpenPrice,
-			LiqPrice:     currentOrderPos.LiquidationPrice,
-			UnrealizedPl: currentOrderPos.UnrealizedPL,
-			MarkPrice:    currentOrderPos.MarketPrice,
-			Side:         side,
-			Size:         order.Size,
-			Margin:       currentOrderPos.Margin,
-			UserEmail:    v.UserEmail,
-			Status:       "opened",
-			Exchange:     "bitget",
+			Symbol:         order.Symbol,
+			Leverage:       fmt.Sprintf("%d", currentOrderPos.Leverage),
+			OpenPrice:      currentOrderPos.AverageOpenPrice,
+			LiqPrice:       currentOrderPos.LiquidationPrice,
+			UnrealizedPl:   currentOrderPos.UnrealizedPL,
+			MarkPrice:      currentOrderPos.MarketPrice,
+			Side:           side,
+			Size:           order.Size,
+			Margin:         currentOrderPos.Margin,
+			UserEmail:      v.UserEmail,
+			Status:         "opened",
+			Exchange:       "bitget",
+			FirstBuyAmount: order.Size,
 		}
 
 		posResponse, createErr := userPosition.UpdateOrCreatePosition(db)

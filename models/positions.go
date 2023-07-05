@@ -28,6 +28,7 @@ type Positions struct {
 	OrderId         string
 	Layer           int     `json:"layer"`
 	TotalProfit     float64 `json:"total_profit"`
+	FirstBuyAmount  string  `json:"first_buy_amount"`
 }
 
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {

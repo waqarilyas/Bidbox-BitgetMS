@@ -216,6 +216,11 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
+		_, openPosError := OpenUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
+		if openPosError != nil {
+			return
+		}
+
 		_, avgPosError := AverageUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
 		if avgPosError != nil {
 			return
@@ -342,7 +347,7 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 	closeOrderPayload := utils.NormalOrderRequest{
 		MarginCoin: "SUSDT",
 		Symbol:     position.Symbol,
-		Size:       position.Size,
+		Size:       position.FirstBuyAmount,
 		Side:       orderSide,
 		OrderType:  "market",
 	}

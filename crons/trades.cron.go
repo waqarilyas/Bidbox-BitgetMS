@@ -274,10 +274,12 @@ func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v m
 	}
 
 	for _, order := range orders {
+		side := "long"
 		currentOrderPos := longPos
 
 		if order.Side == "open_short" {
 			currentOrderPos = shortPos
+			side = "short"
 		}
 
 		userPosition := models.Positions{
@@ -287,7 +289,7 @@ func fetchAndUpdateBitgetPosition(orders []*models.Order, coinsymbol string, v m
 			LiqPrice:     currentOrderPos.LiquidationPrice,
 			UnrealizedPl: currentOrderPos.UnrealizedPL,
 			MarkPrice:    currentOrderPos.MarketPrice,
-			Side:         order.Side,
+			Side:         side,
 			Size:         order.Size,
 			Margin:       currentOrderPos.Margin,
 			UserEmail:    v.UserEmail,

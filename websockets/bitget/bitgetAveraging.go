@@ -89,11 +89,11 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 	splitted := strings.Split(ticker.Arg.InstID, "USDT")
 	formattedCoinsymbol := "S" + splitted[0] + "SUSDT_SUMCBL"
 
-	floatMarkPrice, err := strconv.ParseFloat(tickerData[0].MarkPrice, 64)
-	if err != nil {
-		fmt.Println("-- error converting ticker mark to float")
-		return
-	}
+	// floatMarkPrice, err := strconv.ParseFloat(tickerData[0].MarkPrice, 64)
+	// if err != nil {
+	// 	fmt.Println("-- error converting ticker mark to float")
+	// 	return
+	// }
 
 	if len(tickerData) > 0 {
 		position := models.Positions{}
@@ -104,8 +104,10 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for _, position := range positions {
-				HandlePositionsOnTicker(floatMarkPrice, position)
+			for userEmail, _ := range positions {
+				fmt.Println("---- user email ---", userEmail)
+
+				// HandlePositionsOnTicker(floatMarkPrice, position)
 			}
 		}
 	}
@@ -129,23 +131,29 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions) {
 		}
 	}
 
-	fmt.Println("🚀 ~ file: bitgetAveraging.go:119 ~ funcHandlePositionsOnTicker ~ longPos:", longPos)
-	fmt.Println("🚀 ~ file: bitgetAveraging.go:121 ~ funcHandlePositionsOnTicker ~ shortPos:", shortPos)
-
 	isLongInProfit, pnl, error := GetProfitPosition(longPos, shortPos, markPrice)
-
 	if error != nil {
 		fmt.Println("--- unable to get position profit ---", error)
 		return
 	}
 
+	if pnl < PERCENTAGE_PROFIT {
+		fmt.Println("---- position profit is less than the percentage profit set by admin ----")
+		return
+	}
+
 	if isLongInProfit {
+
+		fmt.Println("--- long position is in profit ---", longPos)
 		// handle case in which long pos is in profit
 	} else {
 
+		fmt.Println("--- short position is in profit ---", longPos)
+
+		// handle the case in which short is in profit
 	}
 
-	fmt.Println("🚀 ~ file: bitgetAveraging.go:136 ~ funcHandlePositionsOnTicker ~ pnl:", pnl)
+	// fmt.Println("🚀 ~ file: bitgetAveraging.go:136 ~ funcHandlePositionsOnTicker ~ pnl:", pnl)
 
 }
 

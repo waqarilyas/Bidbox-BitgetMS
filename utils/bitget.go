@@ -1,13 +1,15 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
+	"github.com/kryptomind/bidboxapi/AccountsService/api/models"
 	"github.com/kryptomind/bidboxapi/bitgetms/helpers"
-	// "github.com/kryptomind/bidboxapi/KeyService/helpers"
 )
 
 type MarginData struct {
@@ -38,10 +40,18 @@ type MarginDataResponse struct {
 	Data        []MarginData `json:"data"`
 }
 
+type NormalOrderRequest struct {
+	Symbol     string `json:"symbol"`
+	MarginCoin string `json:"marginCoin"`
+	Size       string `json:"size"`
+	Side       string `json:"side"`
+	OrderType  string `json:"orderType"`
+}
+
 func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) ([]MarginData, []MarginData, error) {
 	expires := helpers.GetBitgetServerTimeStamp()
 	uri := "/api/mix/v1/position/allPosition?productType=sumcbl"
-	signature := GenerateBitgetSignature(apiSecret, "GET", uri, expires)
+	signature := GenerateBitgetSignature(apiSecret, apiKey, passphrase, "GET", uri, expires, "")
 
 	url := fmt.Sprintf("https://api.bitget.com%s", uri)
 	method := "GET"
@@ -84,4 +94,64 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 	}
 
 	return requiredPosition, accountData.Data, nil
+}
+
+func PlaceClosePositionOrder(apiKey string, secretKey string, passphrase string, position models.Position, marginCoin string) (string, error) {
+
+	orderSide := "close_long"
+
+	if position.Side == "short" {
+		orderSide = "close_short"
+	}
+
+	payload := NormalOrderRequest{
+		MarginCoin: marginCoin,
+		Symbol:     position.Symbol,
+		Size:       position.Size,
+		Side:       orderSide,
+		OrderType:  "market",
+	}
+
+	host := "https://api.bitget.com"
+	path := "/api/mix/v1/order/placeOrder"
+	url := host + path
+
+	method := "POST"
+	client := &http.Client{}
+
+	jsonVal, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	serverTime := helpers.GetBitgetServerTimeStamp()
+	signature := GenerateBitgetSignature(secretKey, apiKey, passphrase, "POST", path, serverTime, string(jsonVal))
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonVal))
+	req.Header.Add("ACCESS-KEY", apiKey)
+	req.Header.Add("ACCESS-SIGN", signature)
+	req.Header.Add("ACCESS-TIMESTAMP", serverTime)
+	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("local", "zh-CN")
+
+	if err != nil {
+		return "", err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return "", errors.New("unable to close position at the moment")
+	}
+	return string(body), nil
 }

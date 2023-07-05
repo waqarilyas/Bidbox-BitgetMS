@@ -26,6 +26,8 @@ type Positions struct {
 	Exchange        string    `json:"exchange"`
 	LastUpdatePrice string    `json:"last_update_price"`
 	OrderId         string
+	Layer           int     `json:"layer"`
+	TotalProfit     float64 `json:"total_profit"`
 }
 
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {
@@ -92,4 +94,22 @@ func (u *Positions) GetOpenPositionsByExchangeAndSymbol(db *gorm.DB, exchange st
 		return &[]Positions{}, err
 	}
 	return &positions, nil
+}
+
+func (u *Positions) GetGroupedOpenPositionsByExchangeAndCoinSymbol(db *gorm.DB, exchange string, coinSymbol string) (map[string][]Positions, error) {
+	positions := []Positions{}
+	err := db.Model(&Positions{}).Where("exchange = ? AND status = ? AND symbol = ?", exchange, "opened", coinSymbol).Find(&positions).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map to group positions by user email
+	groupedPositions := make(map[string][]Positions)
+
+	// Iterate through the fetched positions and group them by user email
+	for _, pos := range positions {
+		groupedPositions[pos.UserEmail] = append(groupedPositions[pos.UserEmail], pos)
+	}
+
+	return groupedPositions, nil
 }

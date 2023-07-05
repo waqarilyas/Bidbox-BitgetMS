@@ -113,3 +113,13 @@ func (u *Positions) GetGroupedOpenPositionsByExchangeAndCoinSymbol(db *gorm.DB, 
 
 	return groupedPositions, nil
 }
+
+func UpdatePositionByID(db *gorm.DB, positionID int, newPositionData Positions) error {
+	err := db.Model(&Positions{}).
+		Where("id = ?", positionID).
+		Updates(newPositionData).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}

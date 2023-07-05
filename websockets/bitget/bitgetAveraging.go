@@ -113,14 +113,14 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 					return
 				}
 
-				HandlePositionsOnTicker(floatMarkPrice, position, db)
+				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}
 		}
 	}
 
 }
 
-func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db *gorm.DB) {
+func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db *gorm.DB, formattedCoinsymbol string) {
 	if len(positions) != 2 {
 		return
 	}
@@ -160,6 +160,8 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 		return
 	}
 
+	positionProfitUSD := 0.0
+
 	if isLongInProfit {
 
 		if longPos.Layer >= ALLOWED_LAYERS {
@@ -167,14 +169,28 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
-		fmt.Println("--- long position is in profit ---", pnl)
+		openPriceFloat, convErr := strconv.ParseFloat(longPos.OpenPrice, 64)
+		if convErr != nil {
+			fmt.Println("--- unable to convert open price to float ----", convErr)
+			return
 
-		_, closePosError := CloseUserPosition(db, longPos, apiKey, secretKey, passphrase)
+		}
+
+		positionProfitUSD = openPriceFloat - markPrice
+
+		// close Position in Profit
+		_, closePosError := CloseUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
 		if closePosError != nil {
 			return
 		}
 
-		// handle case in which long pos is in profit
+		_, avgPosError := AverageUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
+		if avgPosError != nil {
+			return
+		}
+
+		shortPos.Layer += 1
+
 	} else {
 
 		if shortPos.Layer >= ALLOWED_LAYERS {
@@ -182,22 +198,36 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
-		_, closePosError := CloseUserPosition(db, shortPos, apiKey, secretKey, passphrase)
+		openPriceFloat, convErr := strconv.ParseFloat(shortPos.OpenPrice, 64)
+		if convErr != nil {
+			fmt.Println("--- unable to convert open price to float ----", convErr)
+			return
+
+		}
+
+		positionProfitUSD = markPrice - openPriceFloat
+
+		_, closePosError := CloseUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
 		if closePosError != nil {
 			return
 		}
 
-		fmt.Println("--- short position is in profit ---", longPos)
+		_, avgPosError := AverageUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
+		if avgPosError != nil {
+			return
+		}
 
-		// handle the case in which short is in profit
+		longPos.Layer += 1
+
 	}
+
+	UpdateUserPositionsInDatabase(db, longPos, shortPos, apiKey, secretKey, passphrase, formattedCoinsymbol, positionProfitUSD)
 
 	// fmt.Println("🚀 ~ file: bitgetAveraging.go:136 ~ funcHandlePositionsOnTicker ~ pnl:", pnl)
 
 }
 
-func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string) (string, error) {
-
+func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
 	orderSide := "close_long"
 	if position.Side == "short" {
 		orderSide = "close_short"
@@ -220,6 +250,81 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 	}
 
 	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
+
+	floatSize, convErr := strconv.ParseFloat(closeOrderPayload.Size, 64)
+	if convErr != nil {
+		fmt.Println("--unable to convert size to float--")
+	}
+
+	quoteAmount := floatSize * markPrice
+
+	dbOrder := models.Order{
+		Email:       position.UserEmail,
+		Symbol:      position.Symbol,
+		MarginCoin:  closeOrderPayload.MarginCoin,
+		Size:        position.Size,
+		Side:        orderSide,
+		OrderType:   closeOrderPayload.OrderType,
+		Service:     position.Exchange,
+		QuoteAmount: quoteAmount,
+		Profit:      0.0,
+	}
+
+	_, saveErr := dbOrder.SaveOrder(db)
+	if saveErr != nil {
+		fmt.Println("---- unabel to save order in database ---")
+	}
+
+	return "successfully closed position", nil
+}
+
+func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
+	orderSide := "open_long"
+	if position.Side == "short" {
+		orderSide = "open_short"
+	}
+
+	closeOrderPayload := utils.NormalOrderRequest{
+		MarginCoin: "SUSDT",
+		Symbol:     position.Symbol,
+		Size:       position.Size,
+		Side:       orderSide,
+		OrderType:  "market",
+	}
+
+	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, closeOrderPayload)
+	if closePosError != nil {
+		fmt.Println(" --- unable to close position ---")
+		fmt.Println(" --- user email ---", position.UserEmail)
+		fmt.Println(" --- coinSymbol ---", position.Symbol)
+		return "", closePosError
+	}
+
+	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
+
+	floatSize, convErr := strconv.ParseFloat(closeOrderPayload.Size, 64)
+	if convErr != nil {
+		fmt.Println("--unable to convert size to float--")
+	}
+
+	quoteAmount := floatSize * markPrice
+
+	dbOrder := models.Order{
+		Email:       position.UserEmail,
+		Symbol:      position.Symbol,
+		MarginCoin:  closeOrderPayload.MarginCoin,
+		Size:        position.Size,
+		Side:        orderSide,
+		OrderType:   closeOrderPayload.OrderType,
+		Service:     position.Exchange,
+		QuoteAmount: quoteAmount,
+		Profit:      0.0,
+	}
+
+	_, saveErr := dbOrder.SaveOrder(db)
+	if saveErr != nil {
+		fmt.Println("---- unabel to save order in database ---")
+	}
 
 	return "successfully closed position", nil
 }
@@ -265,4 +370,40 @@ func GetPosPnl(position models.Positions, markPrice float64) (float64, error) {
 	}
 
 	return positionPnl, nil
+}
+
+func UpdateUserPositionsInDatabase(db *gorm.DB, longPos models.Positions, shortPos models.Positions, apiKey string, secretKey string, passphrase string, coinSymbol string, profit float64) {
+	reqPositions, _, posError := utils.PerformBitgetPositionQuery(apiKey, secretKey, passphrase, coinSymbol)
+	if posError != nil {
+		fmt.Println("---- unable to get user updated positions from exchange ----")
+	}
+
+	for _, position := range reqPositions {
+		currDbPos := longPos
+		if position.HoldSide == "short" {
+			currDbPos = shortPos
+		}
+
+		profits := currDbPos.TotalProfit + profit
+
+		updatedPosition := models.Positions{
+			Symbol:       position.Symbol,
+			Leverage:     fmt.Sprintf("%d", position.Leverage),
+			OpenPrice:    position.AverageOpenPrice,
+			LiqPrice:     position.LiquidationPrice,
+			UnrealizedPl: position.UnrealizedPL,
+			MarkPrice:    position.MarketPrice,
+			Size:         position.Available,
+			Margin:       position.Margin,
+			TotalProfit:  profits,
+			Layer:        currDbPos.Layer,
+		}
+
+		updateErr := models.UpdatePositionByID(db, currDbPos.Id, updatedPosition)
+		if updateErr != nil {
+			fmt.Println("---- unable to update position in databaSe ----", updateErr)
+		}
+
+	}
+
 }

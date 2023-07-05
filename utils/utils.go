@@ -261,10 +261,14 @@ func SelectRandomElement(strings []string) string {
 	return strings[index]
 }
 
-func CalculateLongPosFloatingPnL(entryPrice float64, markPrice float64, quantity float64) float64 {
-	return (markPrice - entryPrice) * quantity
+func CalculateLongPosFloatingPnLPercentage(entryPrice float64, markPrice float64, quantity float64) float64 {
+	pnl := (markPrice - entryPrice) * quantity
+	pnlPercentage := (pnl / (entryPrice * quantity)) * 100
+	return pnlPercentage
 }
 
-func CalculateShortPosFloatingPnL(entryPrice float64, markPrice float64, quantity float64) float64 {
-	return (entryPrice - markPrice) * quantity
+func CalculateShortPosFloatingPnLPercentage(entryPrice float64, markPrice float64, quantity float64) float64 {
+	pnl := (entryPrice - markPrice) * quantity
+	pnlPercentage := (pnl / (entryPrice * quantity)) * 100
+	return pnlPercentage
 }

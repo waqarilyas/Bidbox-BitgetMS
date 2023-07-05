@@ -21,7 +21,8 @@ type Ticker struct {
 }
 
 const (
-	PERCENTAGE_PROFIT = 3.0
+	PERCENTAGE_PROFIT = 0.5
+	ALLOWED_LAYERS    = 2
 )
 
 func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
@@ -89,11 +90,11 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 	splitted := strings.Split(ticker.Arg.InstID, "USDT")
 	formattedCoinsymbol := "S" + splitted[0] + "SUSDT_SUMCBL"
 
-	// floatMarkPrice, err := strconv.ParseFloat(tickerData[0].MarkPrice, 64)
-	// if err != nil {
-	// 	fmt.Println("-- error converting ticker mark to float")
-	// 	return
-	// }
+	floatMarkPrice, err := strconv.ParseFloat(tickerData[0].MarkPrice, 64)
+	if err != nil {
+		fmt.Println("-- error converting ticker mark to float")
+		return
+	}
 
 	if len(tickerData) > 0 {
 		position := models.Positions{}
@@ -104,17 +105,22 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for userEmail, _ := range positions {
+			for userEmail, position := range positions {
 				fmt.Println("---- user email ---", userEmail)
 
-				// HandlePositionsOnTicker(floatMarkPrice, position)
+				if userEmail != "kmtester@yopmail.com" {
+					fmt.Println("---- user is not km tester ----")
+					return
+				}
+
+				HandlePositionsOnTicker(floatMarkPrice, position, db)
 			}
 		}
 	}
 
 }
 
-func HandlePositionsOnTicker(markPrice float64, positions []models.Positions) {
+func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db *gorm.DB) {
 	if len(positions) != 2 {
 		return
 	}
@@ -138,15 +144,48 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions) {
 	}
 
 	if pnl < PERCENTAGE_PROFIT {
-		fmt.Println("---- position profit is less than the percentage profit set by admin ----")
+		fmt.Println("---- position profit is less than the percentage profit set by admin ----", pnl)
+		return
+	}
+
+	userKeys, error := models.FindKeysByEmailandService(db, longPos.UserEmail, longPos.Exchange)
+	if error != nil {
+		fmt.Println("--- user keys not found ---", longPos.UserEmail)
+		return
+	}
+
+	apiKey, secretKey, passphrase, decryptError := utils.DecryptKeys(userKeys.ApiKey, userKeys.SecretKey, userKeys.Passphrase, "bitget")
+	if decryptError != nil {
+		fmt.Println("--- error decrypting user keys ---", longPos.UserEmail)
 		return
 	}
 
 	if isLongInProfit {
 
-		fmt.Println("--- long position is in profit ---", longPos)
+		if longPos.Layer >= ALLOWED_LAYERS {
+			fmt.Println("--- num layers reached ----")
+			return
+		}
+
+		fmt.Println("--- long position is in profit ---", pnl)
+
+		_, closePosError := CloseUserPosition(db, longPos, apiKey, secretKey, passphrase)
+		if closePosError != nil {
+			return
+		}
+
 		// handle case in which long pos is in profit
 	} else {
+
+		if shortPos.Layer >= ALLOWED_LAYERS {
+			fmt.Println("--- num layers reached ----")
+			return
+		}
+
+		_, closePosError := CloseUserPosition(db, shortPos, apiKey, secretKey, passphrase)
+		if closePosError != nil {
+			return
+		}
 
 		fmt.Println("--- short position is in profit ---", longPos)
 
@@ -155,6 +194,34 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions) {
 
 	// fmt.Println("🚀 ~ file: bitgetAveraging.go:136 ~ funcHandlePositionsOnTicker ~ pnl:", pnl)
 
+}
+
+func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string) (string, error) {
+
+	orderSide := "close_long"
+	if position.Side == "short" {
+		orderSide = "close_short"
+	}
+
+	closeOrderPayload := utils.NormalOrderRequest{
+		MarginCoin: "SUSDT",
+		Symbol:     position.Symbol,
+		Size:       position.Size,
+		Side:       orderSide,
+		OrderType:  "market",
+	}
+
+	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, closeOrderPayload)
+	if closePosError != nil {
+		fmt.Println(" --- unable to close position ---")
+		fmt.Println(" --- user email ---", position.UserEmail)
+		fmt.Println(" --- coinSymbol ---", position.Symbol)
+		return "", closePosError
+	}
+
+	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
+
+	return "successfully closed position", nil
 }
 
 func GetProfitPosition(longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {
@@ -173,7 +240,6 @@ func GetProfitPosition(longPos models.Positions, shortPos models.Positions, mark
 	} else {
 		return false, shortPnl, nil
 	}
-
 }
 
 func GetPosPnl(position models.Positions, markPrice float64) (float64, error) {
@@ -193,50 +259,10 @@ func GetPosPnl(position models.Positions, markPrice float64) (float64, error) {
 	var positionPnl float64
 
 	if position.Side == "long" {
-		positionPnl = utils.CalculateLongPosFloatingPnL(floatPosEntryPrice, markPrice, floatPosSize)
+		positionPnl = utils.CalculateLongPosFloatingPnLPercentage(floatPosEntryPrice, markPrice, floatPosSize)
 	} else {
-		positionPnl = utils.CalculateShortPosFloatingPnL(floatPosEntryPrice, markPrice, floatPosSize)
+		positionPnl = utils.CalculateShortPosFloatingPnLPercentage(floatPosEntryPrice, markPrice, floatPosSize)
 	}
 
 	return positionPnl, nil
-
 }
-
-// func HandlePositionOnRateUpdate(ticker SnapshotData, position models.Positions, markProce float64) {
-
-// 	floatPosEntryPrice, error := strconv.ParseFloat(position.OpenPrice, 64)
-// 	if error != nil {
-// 		fmt.Println("-- error converting position entry price to float")
-// 	}
-
-// 	floatPosSize, error := strconv.ParseFloat(position.OpenPrice, 64)
-// 	if error != nil {
-// 		fmt.Println("-- error converting position entry price to float")
-// 	}
-
-// 	// if position.Side == "long" {
-// 	// 	handleLongPosition(position, positionPnl)
-// 	// } else if position.Side == "short" {
-// 	// 	positionPnl := utils.CalculateShortPosFloatingPnL(floatPosEntryPrice, floatMarkPrice, floatPosSize)
-// 	// 	handleShortPosition(position, positionPnl)
-// 	// }
-
-// }
-
-// func handleLongPosition(position models.Positions, pnl float64) {
-// 	fmt.Println("🚀 ~ file: bitgetAveraging.go:130 ~ funchandleLongPosition ~ pnl:", pnl)
-
-// 	if pnl > PERCENTAGE_PROFIT {
-// 		//handle trade closing logic here
-// 	}
-
-// }
-
-// func handleShortPosition(position models.Positions, pnl float64) {
-// 	fmt.Println("🚀 ~ file: bitgetAveraging.go:135 ~ funchandleShortPosition ~ pnl:", pnl)
-
-// 	if pnl > PERCENTAGE_PROFIT {
-// 		//handle trade closing logic here
-
-// 	}
-// }

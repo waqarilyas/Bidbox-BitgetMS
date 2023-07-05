@@ -97,13 +97,10 @@ func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair 
 }
 
 func PlaceClosePositionOrder(apiKey string, secretKey string, passphrase string, position models.Positions, marginCoin string) (string, error) {
-
 	orderSide := "close_long"
-
 	if position.Side == "short" {
 		orderSide = "close_short"
 	}
-
 	payload := NormalOrderRequest{
 		MarginCoin: marginCoin,
 		Symbol:     position.Symbol,
@@ -111,6 +108,109 @@ func PlaceClosePositionOrder(apiKey string, secretKey string, passphrase string,
 		Side:       orderSide,
 		OrderType:  "market",
 	}
+
+	host := "https://api.bitget.com"
+	path := "/api/mix/v1/order/placeOrder"
+	url := host + path
+
+	method := "POST"
+	client := &http.Client{}
+
+	jsonVal, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	serverTime := helpers.GetBitgetServerTimeStamp()
+	signature := GenerateBitgetSignature(secretKey, apiKey, passphrase, "POST", path, serverTime, string(jsonVal))
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonVal))
+	req.Header.Add("ACCESS-KEY", apiKey)
+	req.Header.Add("ACCESS-SIGN", signature)
+	req.Header.Add("ACCESS-TIMESTAMP", serverTime)
+	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("local", "zh-CN")
+
+	if err != nil {
+		return "", err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return "", errors.New("unable to close position at the moment")
+	}
+	return string(body), nil
+}
+
+func PlaceOpenPositionOrder(apiKey string, secretKey string, passphrase string, position NormalOrderRequest) (string, error) {
+
+	host := "https://api.bitget.com"
+	path := "/api/mix/v1/order/placeOrder"
+	url := host + path
+
+	method := "POST"
+	client := &http.Client{}
+
+	jsonVal, err := json.Marshal(position)
+	if err != nil {
+		return "", err
+	}
+
+	serverTime := helpers.GetBitgetServerTimeStamp()
+	signature := GenerateBitgetSignature(secretKey, apiKey, passphrase, "POST", path, serverTime, string(jsonVal))
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonVal))
+	req.Header.Add("ACCESS-KEY", apiKey)
+	req.Header.Add("ACCESS-SIGN", signature)
+	req.Header.Add("ACCESS-TIMESTAMP", serverTime)
+	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("local", "zh-CN")
+
+	if err != nil {
+		return "", err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return "", errors.New("unable to close position at the moment")
+	}
+	return string(body), nil
+}
+
+func PlaceBitgetOrder(apiKey string, secretKey string, passphrase string, payload NormalOrderRequest) (string, error) {
+	// orderSide := "close_long"
+	// if position.Side == "short" {
+	// 	orderSide = "close_short"
+	// }
+	// payload := NormalOrderRequest{
+	// 	MarginCoin: marginCoin,
+	// 	Symbol:     position.Symbol,
+	// 	Size:       position.Size,
+	// 	Side:       orderSide,
+	// 	OrderType:  "market",
+	// }
 
 	host := "https://api.bitget.com"
 	path := "/api/mix/v1/order/placeOrder"

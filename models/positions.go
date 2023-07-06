@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 )
 
@@ -26,9 +27,10 @@ type Positions struct {
 	Exchange        string    `json:"exchange"`
 	LastUpdatePrice string    `json:"last_update_price"`
 	OrderId         string
-	Layer           int     `json:"layer"`
-	TotalProfit     float64 `json:"total_profit"`
-	FirstBuyAmount  string  `json:"first_buy_amount"`
+	Layer           int       `json:"layer"`
+	TotalProfit     float64   `json:"total_profit"`
+	FirstBuyAmount  string    `json:"first_buy_amount"`
+	HedgeId         uuid.UUID `gorm:"type:uuid" json:"hedge_id"`
 }
 
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {

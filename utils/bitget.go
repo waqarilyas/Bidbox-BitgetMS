@@ -48,6 +48,20 @@ type NormalOrderRequest struct {
 	OrderType  string `json:"orderType"`
 }
 
+type OrderRequest struct {
+	// Symbol     string `json:"symbol"`
+	// MarginCoin string `json:"marginCoin"`
+	Size      string `json:"size"`
+	Side      string `json:"side"`
+	OrderType string `json:"orderType"`
+}
+
+type BitgetBatchOrderRequest struct {
+	Symbol        string         `json:"symbol"`
+	MarginCoin    string         `json:"marginCoin"`
+	OrderDataList []OrderRequest `json:"orderDataList"`
+}
+
 func PerformBitgetPositionQuery(apiKey, apiSecret, passphrase string, coin_pair string) ([]MarginData, []MarginData, error) {
 	expires := helpers.GetBitgetServerTimeStamp()
 	uri := "/api/mix/v1/position/allPosition?productType=sumcbl"
@@ -200,18 +214,6 @@ func PlaceOpenPositionOrder(apiKey string, secretKey string, passphrase string, 
 }
 
 func PlaceBitgetOrder(apiKey string, secretKey string, passphrase string, payload NormalOrderRequest) (string, error) {
-	// orderSide := "close_long"
-	// if position.Side == "short" {
-	// 	orderSide = "close_short"
-	// }
-	// payload := NormalOrderRequest{
-	// 	MarginCoin: marginCoin,
-	// 	Symbol:     position.Symbol,
-	// 	Size:       position.Size,
-	// 	Side:       orderSide,
-	// 	OrderType:  "market",
-	// }
-
 	host := "https://api.bitget.com"
 	path := "/api/mix/v1/order/placeOrder"
 	url := host + path
@@ -252,6 +254,51 @@ func PlaceBitgetOrder(apiKey string, secretKey string, passphrase string, payloa
 
 	if res.StatusCode != http.StatusOK {
 		return "", errors.New("unable to close position at the moment")
+	}
+	return string(body), nil
+}
+
+func PlaceBitgetBatchOrder(apiKey string, secretKey string, passphrase string, order *BitgetBatchOrderRequest) (string, error) {
+	host := "https://api.bitget.com"
+	path := "/api/mix/v1/order/batch-orders"
+	url := host + path
+
+	method := "POST"
+	client := &http.Client{}
+
+	jsonVal, err := json.Marshal(order)
+	if err != nil {
+		return "", err
+	}
+
+	serverTime := helpers.GetBitgetServerTimeStamp()
+	signature := GenerateBitgetSignature(secretKey, apiKey, passphrase, "POST", path, serverTime, string(jsonVal))
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonVal))
+	req.Header.Add("ACCESS-KEY", apiKey)
+	req.Header.Add("ACCESS-SIGN", signature)
+	req.Header.Add("ACCESS-TIMESTAMP", serverTime)
+	req.Header.Add("ACCESS-PASSPHRASE", passphrase)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("local", "zh-CN")
+
+	if err != nil {
+		return "", err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return "", errors.New("bitget batch order failed")
 	}
 	return string(body), nil
 }

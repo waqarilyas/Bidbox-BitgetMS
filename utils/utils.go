@@ -274,8 +274,8 @@ func CalculateShortPosFloatingPnLPercentage(entryPrice float64, markPrice float6
 	return pnlPercentage
 }
 
-func CalculateLayeredPnl(orders []models.Order, markPrice float64) float64 {
-	totalQuoteAmount := 0.0
+func CalculateLongLayeredPnl(orders []models.Order, markPrice float64) float64 {
+	totalBaseAmount := 0.0
 	totalProfit := 0.0
 
 	for i := range orders {
@@ -288,12 +288,50 @@ func CalculateLayeredPnl(orders []models.Order, markPrice float64) float64 {
 			continue
 		}
 
+		orderSize, convErr := strconv.ParseFloat(order.Size, 64)
+
+		if convErr != nil {
+			fmt.Println("----- unable to convert ordersize while calculating layered pnl ----", convErr)
+			continue
+		}
+
 		// Calculate the profit/loss based on the mark price
-		profit := (markPrice - orderPrice) * order.QuoteAmount
-		totalQuoteAmount += order.QuoteAmount
+		profit := (markPrice - orderPrice) * orderSize
+		totalBaseAmount += (orderSize * orderPrice)
 		totalProfit += profit
 	}
 
-	pnlPercentage := (totalProfit / totalQuoteAmount) * 100
+	pnlPercentage := (totalProfit / totalBaseAmount) * 100
+	return pnlPercentage
+}
+
+func CalculateShortLayeredPnl(orders []models.Order, markPrice float64) float64 {
+	totalBaseAmount := 0.0
+	totalProfit := 0.0
+
+	for i := range orders {
+		order := &orders[i]
+
+		// Convert the OrderPrice from string to float64
+		orderPrice, err := strconv.ParseFloat(order.OrderPrice, 64)
+		if err != nil {
+			fmt.Printf("Error parsing OrderPrice for order %v: %v\n", order.PositionId, err)
+			continue
+		}
+
+		orderSize, convErr := strconv.ParseFloat(order.Size, 64)
+
+		if convErr != nil {
+			fmt.Println("----- unable to convert ordersize while calculating layered pnl ----", convErr)
+			continue
+		}
+
+		// Calculate the profit/loss based on the mark price
+		profit := (orderPrice - markPrice) * orderSize
+		totalBaseAmount += (orderSize * orderPrice)
+		totalProfit += profit
+	}
+
+	pnlPercentage := (totalProfit / totalBaseAmount) * 100
 	return pnlPercentage
 }

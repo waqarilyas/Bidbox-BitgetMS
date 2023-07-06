@@ -105,12 +105,12 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for userEmail, position := range positions {
+			for _, position := range positions {
 
-				if userEmail != "kmtester@yopmail.com" {
-					fmt.Println("---- user is not km tester ----")
-					return
-				}
+				// if userEmail != "kmtester@yopmail.com" {
+				// 	fmt.Println("---- user is not km tester ----")
+				// 	return
+				// }
 
 				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}

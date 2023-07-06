@@ -51,21 +51,21 @@ func Run() {
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
-	bitget_WS.WebsocketTest()
+	// bitget_WS.WebsocketTest()
 
-	// bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
-	// 	Action: "snapshot",
-	// 	Arg: bitget_websockets.Subscription{
-	// 		InstType: "mc",
-	// 		Channel:  "ticker",
-	// 		InstID:   "BTCUSDT",
-	// 	},
-	// 	Data: []bitget_websockets.SnapshotData{
-	// 		{
-	// 			MarkPrice: "31800",
-	// 		},
-	// 	},
-	// })
+	bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
+		Action: "snapshot",
+		Arg: bitget_websockets.Subscription{
+			InstType: "mc",
+			Channel:  "ticker",
+			InstID:   "BTCUSDT",
+		},
+		Data: []bitget_websockets.SnapshotData{
+			{
+				MarkPrice: "31800",
+			},
+		},
+	})
 	server.Run(":8080")
 }
 

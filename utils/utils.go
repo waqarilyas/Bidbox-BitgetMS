@@ -16,6 +16,7 @@ import (
 	// "io/ioutil"
 
 	helpers "github.com/WAQAR5/bitget-helpers"
+	"github.com/kryptomind/bidboxapi/bitgetms/models"
 )
 
 func initCoinPiars() ([]string, error) {
@@ -270,5 +271,67 @@ func CalculateLongPosFloatingPnLPercentage(entryPrice float64, markPrice float64
 func CalculateShortPosFloatingPnLPercentage(entryPrice float64, markPrice float64, quantity float64) float64 {
 	pnl := (entryPrice - markPrice) * quantity
 	pnlPercentage := (pnl / (entryPrice * quantity)) * 100
+	return pnlPercentage
+}
+
+func CalculateLongLayeredPnl(orders []models.Order, markPrice float64) float64 {
+	totalBaseAmount := 0.0
+	totalProfit := 0.0
+
+	for i := range orders {
+		order := &orders[i]
+
+		// Convert the OrderPrice from string to float64
+		orderPrice, err := strconv.ParseFloat(order.OrderPrice, 64)
+		if err != nil {
+			fmt.Printf("Error parsing OrderPrice for order %v: %v\n", order.PositionId, err)
+			continue
+		}
+
+		orderSize, convErr := strconv.ParseFloat(order.Size, 64)
+
+		if convErr != nil {
+			fmt.Println("----- unable to convert ordersize while calculating layered pnl ----", convErr)
+			continue
+		}
+
+		// Calculate the profit/loss based on the mark price
+		profit := (markPrice - orderPrice) * orderSize
+		totalBaseAmount += (orderSize * orderPrice)
+		totalProfit += profit
+	}
+
+	pnlPercentage := (totalProfit / totalBaseAmount) * 100
+	return pnlPercentage
+}
+
+func CalculateShortLayeredPnl(orders []models.Order, markPrice float64) float64 {
+	totalBaseAmount := 0.0
+	totalProfit := 0.0
+
+	for i := range orders {
+		order := &orders[i]
+
+		// Convert the OrderPrice from string to float64
+		orderPrice, err := strconv.ParseFloat(order.OrderPrice, 64)
+		if err != nil {
+			fmt.Printf("Error parsing OrderPrice for order %v: %v\n", order.PositionId, err)
+			continue
+		}
+
+		orderSize, convErr := strconv.ParseFloat(order.Size, 64)
+
+		if convErr != nil {
+			fmt.Println("----- unable to convert ordersize while calculating layered pnl ----", convErr)
+			continue
+		}
+
+		// Calculate the profit/loss based on the mark price
+		profit := (orderPrice - markPrice) * orderSize
+		totalBaseAmount += (orderSize * orderPrice)
+		totalProfit += profit
+	}
+
+	pnlPercentage := (totalProfit / totalBaseAmount) * 100
 	return pnlPercentage
 }

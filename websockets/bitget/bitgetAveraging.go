@@ -105,12 +105,12 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for _, position := range positions {
+			for userEmail, position := range positions {
 
-				// if userEmail != "kmtester@yopmail.com" {
-				// 	fmt.Println("---- user is not km tester ----")
-				// 	return
-				// }
+				if userEmail != "kmtester@yopmail.com" {
+					fmt.Println("---- user is not km tester ----")
+					return
+				}
 
 				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}
@@ -128,7 +128,6 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 	var shortPos models.Positions
 
 	for _, pos := range positions {
-
 		if pos.Side == "long" {
 			longPos = pos
 		} else if pos.Side == "short" {
@@ -136,7 +135,7 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 		}
 	}
 
-	isLongInProfit, pnl, error := GetProfitPosition(longPos, shortPos, markPrice)
+	isLongInProfit, pnl, error := GetProfitPosition(db, longPos, shortPos, markPrice)
 	if error != nil {
 		fmt.Println("--- unable to get position profit ---", error)
 		return
@@ -394,15 +393,51 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 	return "successfully closed position", nil
 }
 
-func GetProfitPosition(longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {
-	shortPnl, shortError := GetPosPnl(shortPos, markPrice)
-	if shortError != nil {
-		return false, 0.0, shortError
+func GetProfitPosition(db *gorm.DB, longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {
+
+	shortPnl := 0.0
+	var shortError error
+
+	longPnl := 0.0
+	var longError error
+
+	if shortPos.Layer > 0 {
+		positionOrders, orderError := models.GetOrdersByPositionIdAndSide(db, shortPos.Id, "open_short")
+		if orderError != nil {
+			fmt.Println("--- unable to get position orders for pnl ---")
+		}
+
+		var orders []models.Order
+		for _, order := range positionOrders {
+			orders = append(orders, *order)
+		}
+
+		shortPnl = utils.CalculateShortLayeredPnl(orders, markPrice)
+	} else {
+		shortPnl, shortError = GetPosPnl(shortPos, markPrice)
+		if shortError != nil {
+			return false, 0.0, shortError
+		}
 	}
 
-	longPnl, longError := GetPosPnl(longPos, markPrice)
-	if longError != nil {
-		return false, 0.0, longError
+	if longPos.Layer > 0 {
+		positionOrders, orderError := models.GetOrdersByPositionIdAndSide(db, longPos.Id, "open_long")
+		if orderError != nil {
+			fmt.Println("--- unable to get position orders for pnl ---")
+		}
+
+		var orders []models.Order
+		for _, order := range positionOrders {
+			orders = append(orders, *order)
+		}
+
+		longPnl = utils.CalculateLongLayeredPnl(orders, markPrice)
+
+	} else {
+		longPnl, longError = GetPosPnl(longPos, markPrice)
+		if longError != nil {
+			return false, 0.0, longError
+		}
 	}
 
 	if longPnl > shortPnl {
@@ -469,6 +504,131 @@ func UpdateUserPositionsInDatabase(db *gorm.DB, longPos models.Positions, shortP
 			fmt.Println("---- unable to update position in databaSe ----", updateErr)
 		}
 
+	}
+
+}
+
+func CloseSymbolBothPositions(
+	db *gorm.DB,
+	apiKey string,
+	secretKey string,
+	passphrase string,
+	longPos models.Positions,
+	shortPos models.Positions,
+	markPrice float64,
+	isLongInProfit bool,
+	profits float64,
+) {
+
+	longOrder := utils.OrderRequest{
+		Size:      longPos.Size,
+		Side:      "close_long",
+		OrderType: "Market",
+	}
+
+	shortOrder := utils.OrderRequest{
+		Size:      shortPos.Size,
+		Side:      "close_short",
+		OrderType: "Market",
+	}
+
+	batchOrderRequest := utils.BitgetBatchOrderRequest{
+		Symbol:        longPos.Symbol,
+		MarginCoin:    "SUSDT",
+		OrderDataList: []utils.OrderRequest{longOrder, shortOrder},
+	}
+
+	_, error := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
+	if error != nil {
+		fmt.Println("--- error opening positions ---", error)
+		return
+	}
+
+	longSize, convErr := strconv.ParseFloat(longPos.Size, 64)
+	if convErr != nil {
+		fmt.Println("---- conversion error ----", convErr)
+	}
+
+	shortSize, convErr := strconv.ParseFloat(shortPos.Size, 64)
+	if convErr != nil {
+		fmt.Println("---- conversion error ----", convErr)
+	}
+
+	longQuote := longSize * markPrice
+	shortQuote := shortSize * markPrice
+
+	ordersPayload := []*models.Order{
+		{
+			Email:       longPos.UserEmail,
+			Symbol:      longPos.Symbol,
+			MarginCoin:  "SUSDT",
+			Size:        longOrder.Size,
+			Side:        longOrder.Side,
+			OrderType:   longOrder.OrderType,
+			Service:     "bitget",
+			QuoteAmount: longQuote,
+			Profit:      0.0,
+			PositionId:  longPos.Id,
+			OrderPrice:  fmt.Sprintf("%f", markPrice),
+		},
+		{
+			Email:       shortPos.UserEmail,
+			Symbol:      shortPos.Symbol,
+			MarginCoin:  "SUSDT",
+			Size:        longOrder.Size,
+			Side:        shortOrder.Side,
+			OrderType:   shortOrder.OrderType,
+			Service:     "bitget",
+			QuoteAmount: shortQuote,
+			Profit:      0.0,
+			PositionId:  shortPos.Id,
+			OrderPrice:  fmt.Sprintf("%f", markPrice),
+		},
+	}
+
+	_, err := models.SaveMultipleOrders(db, ordersPayload)
+	if err != nil {
+		fmt.Println("--- Unable to save close orders in database ---", err)
+		return
+	}
+
+	updatedPositions := []models.Positions{
+		{
+			Id:           longPos.Id,
+			Symbol:       longPos.Symbol,
+			UnrealizedPl: "0.0",
+			MarkPrice:    fmt.Sprintf("%f", markPrice),
+			Size:         "0",
+			Margin:       "0",
+			TotalProfit:  0.0,
+			Status:       "closed",
+		},
+		{
+			Id:           shortPos.Id,
+			Symbol:       shortPos.Symbol,
+			UnrealizedPl: "0.0",
+			MarkPrice:    fmt.Sprintf("%f", markPrice),
+			Size:         "0",
+			Margin:       "0",
+			TotalProfit:  0.0,
+			Status:       "closed",
+		},
+	}
+
+	if isLongInProfit {
+		updatedPositions[0].TotalProfit = updatedPositions[0].TotalProfit + profits
+	} else {
+		updatedPositions[1].TotalProfit = updatedPositions[1].TotalProfit + profits
+	}
+
+	for _, position := range updatedPositions {
+		updateErr := models.UpdatePositionByID(db, position.Id, position)
+		if updateErr != nil {
+			fmt.Println("---- unable to update position in databaSe ----", updateErr)
+			continue
+		}
+
+		fmt.Println("--- position updated in database succesfully ---")
 	}
 
 }

@@ -73,6 +73,19 @@ type Order struct {
 	OrderPrice  string `json:"order_price"`
 }
 
+func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {
+	var savedOrders []*Order
+	for _, order := range orders {
+		err := db.Create(order).Error
+		if err != nil {
+			fmt.Println("Error in saving function")
+			return nil, err
+		}
+		savedOrders = append(savedOrders, order)
+	}
+	return savedOrders, nil
+}
+
 func (o *Order) Initialize(order OrderRequest, email string, client_id string, order_id string) {
 	o.MarginCoin = order.MarginCoin
 	o.Side = order.Side
@@ -110,17 +123,13 @@ func (o *Order) SaveOrder(db *gorm.DB) (*Order, error) {
 	return o, nil
 }
 
-func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {
-	var savedOrders []*Order
-	for _, order := range orders {
-		err := db.Create(order).Error
-		if err != nil {
-			fmt.Println("Error in saving function")
-			return nil, err
-		}
-		savedOrders = append(savedOrders, order)
+func GetOrdersByPositionIdAndSide(db *gorm.DB, positionId int, side string) ([]*Order, error) {
+	var positions []*Order
+	err := db.Where("position_id = ? AND side = ?", positionId, side).Find(&positions).Error
+	if err != nil {
+		return nil, err
 	}
-	return savedOrders, nil
+	return positions, nil
 }
 
 // func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {

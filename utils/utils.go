@@ -129,10 +129,10 @@ func GetSize(symbol string, first_order float64) (float64, float64, error) {
 
 	tradeAmount := first_order / fprice
 
-	decimalMultiplier := math.Pow(10, float64(3))
-	fixedAmount := math.Round(tradeAmount*decimalMultiplier) / decimalMultiplier
+	// decimalMultiplier := math.Pow(10, float64(3))
+	// fixedAmount := math.Round(tradeAmount*decimalMultiplier) / decimalMultiplier
 
-	return fixedAmount, fprice, nil
+	return tradeAmount, fprice, nil
 }
 
 func GetSizeBybit(symbol string, first_order float64) (float64, float64, error) {

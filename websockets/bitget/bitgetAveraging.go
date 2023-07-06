@@ -21,7 +21,7 @@ type Ticker struct {
 }
 
 const (
-	PERCENTAGE_PROFIT = 1
+	PERCENTAGE_PROFIT = 0.5
 	ALLOWED_LAYERS    = 2
 )
 
@@ -105,18 +105,11 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for userEmail, position := range positions {
-
-				if userEmail != "kmtester@yopmail.com" {
-					fmt.Println("---- user is not km tester ----")
-					return
-				}
-
+			for _, position := range positions {
 				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}
 		}
 	}
-
 }
 
 func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db *gorm.DB, formattedCoinsymbol string) {
@@ -162,8 +155,16 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 
 	if isLongInProfit {
 
-		if longPos.Layer >= ALLOWED_LAYERS {
-			fmt.Println("--- num layers reached ----")
+		if longPos.Layer > 0 {
+			// close whole position because the counter position is in profit
+			floatSize, err := strconv.ParseFloat(longPos.Size, 64)
+			if err != nil {
+				fmt.Println(" -- unable to parse size to float ---")
+				return
+			}
+
+			positionProfitUSD = pnl * floatSize * markPrice
+			CloseSymbolBothPositions(db, apiKey, secretKey, passphrase, longPos, shortPos, markPrice, isLongInProfit, positionProfitUSD)
 			return
 		}
 
@@ -195,8 +196,21 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 
 	} else {
 
-		if shortPos.Layer >= ALLOWED_LAYERS {
-			fmt.Println("--- num layers reached ----")
+		// if shortPos.Layer >= ALLOWED_LAYERS {
+		// 	fmt.Println("--- num layers reached ----")
+		// 	return
+		// }
+
+		if shortPos.Layer > 0 {
+			// close whole position because the counter position is in profit
+			floatSize, err := strconv.ParseFloat(shortPos.Size, 64)
+			if err != nil {
+				fmt.Println(" -- unable to parse size to float ---")
+				return
+			}
+
+			positionProfitUSD = pnl * floatSize * markPrice
+			CloseSymbolBothPositions(db, apiKey, secretKey, passphrase, longPos, shortPos, markPrice, isLongInProfit, positionProfitUSD)
 			return
 		}
 

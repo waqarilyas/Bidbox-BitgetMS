@@ -53,9 +53,9 @@ func (server *TradesCron) Run() {
 		go func(v models.Key) {
 			defer wg.Done()
 
-			// if v.UserEmail != "kmtester@yopmail.com" {
-			// 	return
-			// }
+			if v.UserEmail != "kmtester@yopmail.com" {
+				return
+			}
 
 			val := int(math.Floor(float64(v.TradeAmount)/100.0) * 100)
 			cond := models.Conditions{}

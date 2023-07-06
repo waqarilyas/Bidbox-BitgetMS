@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 	"github.com/kryptomind/bidboxapi/bitgetms/helpers"
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
@@ -300,6 +301,8 @@ func fetchAndUpdateBitgetPosition(coinsymbol string, v models.Key, db *gorm.DB, 
 		}
 	}
 
+	positionsHedgeId := uuid.New()
+
 	for _, pos := range positionsResponse {
 		side := "long"
 		currentOrderPos := longPos
@@ -323,6 +326,7 @@ func fetchAndUpdateBitgetPosition(coinsymbol string, v models.Key, db *gorm.DB, 
 			Status:         "opened",
 			Exchange:       "bitget",
 			FirstBuyAmount: pos.Available,
+			HedgeId:        positionsHedgeId,
 		}
 
 		posResponse, createErr := userPosition.UpdateOrCreatePosition(db)

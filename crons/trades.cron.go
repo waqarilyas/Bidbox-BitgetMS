@@ -329,7 +329,7 @@ func fetchAndUpdateBitgetPosition(coinsymbol string, v models.Key, db *gorm.DB, 
 			HedgeId:        positionsHedgeId,
 		}
 
-		posResponse, createErr := userPosition.UpdateOrCreatePosition(db)
+		posResponse, createErr := userPosition.CreateNewPosition(db)
 		dbPositions = append(dbPositions, *posResponse)
 
 		if createErr != nil {

@@ -47,6 +47,7 @@ func Run() {
 	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
+	// tradesCron.Run()
 	c.Start()
 
 	// Bitget Websocket Connection Logic
@@ -58,11 +59,11 @@ func Run() {
 	// 	Arg: bitget_websockets.Subscription{
 	// 		InstType: "mc",
 	// 		Channel:  "ticker",
-	// 		InstID:   "ETHUSDT",
+	// 		InstID:   "EOSUSDT",
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "1910.965325",
+	// 			MarkPrice: "0.84",
 	// 		},
 	// 	},
 	// })

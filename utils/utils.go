@@ -16,6 +16,7 @@ import (
 	// "io/ioutil"
 
 	helpers "github.com/WAQAR5/bitget-helpers"
+	"github.com/kryptomind/bidboxapi/bitgetms/models"
 )
 
 func initCoinPiars() ([]string, error) {
@@ -270,5 +271,29 @@ func CalculateLongPosFloatingPnLPercentage(entryPrice float64, markPrice float64
 func CalculateShortPosFloatingPnLPercentage(entryPrice float64, markPrice float64, quantity float64) float64 {
 	pnl := (entryPrice - markPrice) * quantity
 	pnlPercentage := (pnl / (entryPrice * quantity)) * 100
+	return pnlPercentage
+}
+
+func CalculateLayeredPnl(orders []models.Order, markPrice float64) float64 {
+	totalQuoteAmount := 0.0
+	totalProfit := 0.0
+
+	for i := range orders {
+		order := &orders[i]
+
+		// Convert the OrderPrice from string to float64
+		orderPrice, err := strconv.ParseFloat(order.OrderPrice, 64)
+		if err != nil {
+			fmt.Printf("Error parsing OrderPrice for order %v: %v\n", order.PositionId, err)
+			continue
+		}
+
+		// Calculate the profit/loss based on the mark price
+		profit := (markPrice - orderPrice) * order.QuoteAmount
+		totalQuoteAmount += order.QuoteAmount
+		totalProfit += profit
+	}
+
+	pnlPercentage := (totalProfit / totalQuoteAmount) * 100
 	return pnlPercentage
 }

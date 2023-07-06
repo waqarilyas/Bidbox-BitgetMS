@@ -394,15 +394,36 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 	return "successfully closed position", nil
 }
 
-func GetProfitPosition(longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {
-	shortPnl, shortError := GetPosPnl(shortPos, markPrice)
-	if shortError != nil {
-		return false, 0.0, shortError
+func GetProfitPosition(db *gorm.DB, longPos models.Positions, shortPos models.Positions, markPrice float64) (bool, float64, error) {
+
+	shortPnl := 0.0
+	var shortError error
+
+	longPnl := 0.0
+	var longError error
+
+	if shortPos.Layer > 0 {
+
+		// handle greater layer pos here
+	} else {
+		shortPnl, shortError = GetPosPnl(shortPos, markPrice)
+		if shortError != nil {
+			return false, 0.0, shortError
+		}
 	}
 
-	longPnl, longError := GetPosPnl(longPos, markPrice)
-	if longError != nil {
-		return false, 0.0, longError
+	if longPos.Layer > 0 {
+		positionOrders, orderError := models.GetOrdersByPositionIdAndSide(db, longPos.Id, "open_long")
+		if orderError != nil {
+			fmt.Println("--- unable to get position orders for pnl ---")
+		}
+
+		//handle greater layer POS here
+	} else {
+		longPnl, longError = GetPosPnl(longPos, markPrice)
+		if longError != nil {
+			return false, 0.0, longError
+		}
 	}
 
 	if longPnl > shortPnl {

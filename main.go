@@ -53,7 +53,7 @@ func Run() {
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
-	bitget_WS.WebsocketTest()
+	// bitget_WS.WebsocketTest()
 
 	// bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
 	// 	Action: "snapshot",

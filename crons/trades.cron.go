@@ -20,7 +20,6 @@ import (
 	"github.com/kryptomind/bidboxapi/bitgetms/helpers"
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
 	"github.com/kryptomind/bidboxapi/bitgetms/utils"
-	bitget_websockets "github.com/kryptomind/bidboxapi/bitgetms/websockets/bitget"
 )
 
 type TradesCron struct {
@@ -53,10 +52,6 @@ func (server *TradesCron) Run() {
 		wg.Add(1)
 		go func(v models.Key) {
 			defer wg.Done()
-
-			// if v.UserEmail != "kmtester@yopmail.com" {
-			// 	return
-			// }
 
 			val := int(math.Floor(float64(v.TradeAmount)/100.0) * 100)
 			cond := models.Conditions{}
@@ -130,28 +125,45 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 		return
 	}
 
-	longOrder := bitget_websockets.OrderRequest{
+	longOrder := utils.OrderRequest{
 		Size:      fmt.Sprintf("%f", orderSize),
 		Side:      "open_long",
 		OrderType: "Market",
 	}
 
-	shortOrder := bitget_websockets.OrderRequest{
+	shortOrder := utils.OrderRequest{
 		Size:      fmt.Sprintf("%f", orderSize),
 		Side:      "open_short",
 		OrderType: "Market",
 	}
 
-	batchOrderRequest := bitget_websockets.BitgetBatchOrderRequest{
+	batchOrderRequest := utils.BitgetBatchOrderRequest{
 		Symbol:        tradeSymbol,
 		MarginCoin:    "SUSDT",
-		OrderDataList: []bitget_websockets.OrderRequest{longOrder, shortOrder},
+		OrderDataList: []utils.OrderRequest{longOrder, shortOrder},
 	}
 
-	_, error := BitgetNewBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
-	if error != nil {
-		fmt.Println("--- error opening positions ---", error)
+	batchOrdersResponse, batchError := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
+	if batchError != nil {
+		fmt.Println("--- error opening positions ---", batchError)
 		return
+	}
+
+	orderIds := batchOrdersResponse.Data.OrderInfo
+
+	var longOrderDetails utils.OrderDetailsResponse
+	var firstOrderError error
+	var shortOrderDetails utils.OrderDetailsResponse
+	var secondOrderError error
+
+	longOrderDetails, firstOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, tradeSymbol, orderIds[0].OrderID)
+	if firstOrderError != nil {
+		fmt.Println("----- first order details api has failed -----")
+	}
+
+	shortOrderDetails, secondOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, tradeSymbol, orderIds[1].OrderID)
+	if secondOrderError != nil {
+		fmt.Println("--- second order details api has failed ----")
 	}
 
 	dbPositions, posError := fetchAndUpdateBitgetPosition(tradeSymbol, *v, db, apiKey, secretKey, passphrase)
@@ -159,7 +171,7 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 		fmt.Println("--- unable to update positions in database ---")
 	}
 
-	_, orderErr := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrder, longOrder, dbPositions)
+	_, orderErr := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrderDetails.Data, longOrderDetails.Data, dbPositions)
 
 	if orderErr != nil {
 		fmt.Println("----  error saving orders ----", err)
@@ -167,7 +179,7 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 
 }
 
-func BitgetNewBatchOrder(apiKey string, secretKey string, passphrase string, order *bitget_websockets.BitgetBatchOrderRequest) (string, error) {
+func BitgetNewBatchOrder(apiKey string, secretKey string, passphrase string, order *utils.BitgetBatchOrderRequest) (string, error) {
 	host := "https://api.bitget.com"
 	path := "/api/mix/v1/order/batch-orders"
 	url := host + path
@@ -227,7 +239,7 @@ func GenerateBitgetSignature(apiSecret string, apiKey string, passphrase string,
 	return signature
 }
 
-func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder bitget_websockets.OrderRequest, longOrder bitget_websockets.OrderRequest, positions []models.Positions) ([]*models.Order, error) {
+func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder utils.OrderDetails, longOrder utils.OrderDetails, positions []models.Positions) ([]*models.Order, error) {
 	var longPos models.Positions
 	var shortPos models.Positions
 
@@ -246,27 +258,31 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			Email:       v.UserEmail,
 			Symbol:      coinSymbol,
 			MarginCoin:  marginCoin,
-			Size:        shortOrder.Size,
+			Size:        fmt.Sprintf("%f", shortOrder.Size),
 			Side:        shortOrder.Side,
 			OrderType:   shortOrder.OrderType,
 			Service:     v.Service,
-			QuoteAmount: quoteAmount,
 			Profit:      0.0,
 			PositionId:  shortPos.Id,
-			OrderPrice:  shortPos.OpenPrice,
+			QuoteAmount: shortOrder.FilledAmount,
+			OrderPrice:  fmt.Sprintf("%f", shortOrder.PriceAvg),
+			Fee:         shortOrder.Fee,
+			OrderId:     shortOrder.OrderID,
 		},
 		{
 			Email:       v.UserEmail,
 			Symbol:      coinSymbol,
 			MarginCoin:  marginCoin,
-			Size:        longOrder.Size,
+			Size:        fmt.Sprintf("%f", longOrder.Size),
 			Side:        longOrder.Side,
 			OrderType:   longOrder.OrderType,
 			Service:     v.Service,
-			QuoteAmount: quoteAmount,
 			Profit:      0.0,
 			PositionId:  longPos.Id,
-			OrderPrice:  longPos.OpenPrice,
+			QuoteAmount: longOrder.FilledAmount,
+			OrderPrice:  fmt.Sprintf("%f", longOrder.PriceAvg),
+			Fee:         longOrder.Fee,
+			OrderId:     longOrder.OrderID,
 		},
 	}
 

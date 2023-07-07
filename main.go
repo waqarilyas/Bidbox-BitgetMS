@@ -59,14 +59,16 @@ func Run() {
 	// 	Arg: bitget_websockets.Subscription{
 	// 		InstType: "mc",
 	// 		Channel:  "ticker",
-	// 		InstID:   "EOSUSDT",
+	// 		InstID:   "ETHUSDT",
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "0.84",
+	// 			MarkPrice: "2000",
 	// 		},
 	// 	},
 	// })
+
+	// decryptRes,error:=utils.DecryptKeys()
 
 	server.Run(":8080")
 }

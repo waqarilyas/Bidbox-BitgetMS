@@ -31,6 +31,7 @@ type Positions struct {
 	TotalProfit     float64   `json:"total_profit"`
 	FirstBuyAmount  string    `json:"first_buy_amount"`
 	HedgeId         uuid.UUID `gorm:"type:uuid" json:"hedge_id"`
+	Fee             float64   `json:"fee"`
 }
 
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {
@@ -106,12 +107,11 @@ func (u *Positions) GetGroupedOpenPositionsByExchangeAndCoinSymbol(db *gorm.DB, 
 		return nil, err
 	}
 
-	// Create a map to group positions by user email
 	groupedPositions := make(map[string][]Positions)
 
-	// Iterate through the fetched positions and group them by user email
 	for _, pos := range positions {
-		groupedPositions[pos.UserEmail] = append(groupedPositions[pos.UserEmail], pos)
+		key := pos.Symbol + "_" + pos.UserEmail
+		groupedPositions[key] = append(groupedPositions[key], pos)
 	}
 
 	return groupedPositions, nil

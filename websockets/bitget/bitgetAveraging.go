@@ -11,6 +11,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jinzhu/gorm"
 
+	"math"
+
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
 	"github.com/kryptomind/bidboxapi/bitgetms/utils"
 )
@@ -106,6 +108,7 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 		if len(positions) > 0 {
 
 			for _, position := range positions {
+
 				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}
 		}
@@ -135,7 +138,6 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 	}
 
 	if pnl < PERCENTAGE_PROFIT {
-		fmt.Println("---- position profit is less than the percentage profit set by admin ----", pnl)
 		return
 	}
 
@@ -168,19 +170,13 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
-		openPriceFloat, convErr := strconv.ParseFloat(longPos.OpenPrice, 64)
-		if convErr != nil {
-			fmt.Println("--- unable to convert open price to float ----", convErr)
-			return
-		}
-
-		positionProfitUSD = markPrice - openPriceFloat
-
 		// close Position in Profit
-		_, closePosError := CloseUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
+		_, profits, closePosError := CloseUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
 		if closePosError != nil {
 			return
 		}
+
+		positionProfitUSD = profits
 
 		_, openPosError := OpenUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
 		if openPosError != nil {
@@ -214,19 +210,12 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
-		openPriceFloat, convErr := strconv.ParseFloat(shortPos.OpenPrice, 64)
-		if convErr != nil {
-			fmt.Println("--- unable to convert open price to float ----", convErr)
-			return
-
-		}
-
-		positionProfitUSD = openPriceFloat - markPrice
-
-		_, closePosError := CloseUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
+		_, profits, closePosError := CloseUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
 		if closePosError != nil {
 			return
 		}
+
+		positionProfitUSD = profits
 
 		_, openPosError := OpenUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
 		if openPosError != nil {
@@ -248,7 +237,7 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 
 }
 
-func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
+func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, float64, error) {
 	orderSide := "close_long"
 	if position.Side == "short" {
 		orderSide = "close_short"
@@ -267,17 +256,13 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 		fmt.Println(" --- unable to close position ---")
 		fmt.Println(" --- user email ---", position.UserEmail)
 		fmt.Println(" --- coinSymbol ---", position.Symbol)
-		return "", closePosError
+		return "", 0.0, closePosError
 	}
 
-	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
-
-	floatSize, convErr := strconv.ParseFloat(closeOrderPayload.Size, 64)
-	if convErr != nil {
-		fmt.Println("--unable to convert size to float--")
+	orderDetails, detailsError := utils.BitgetOrderDetails(apiKey, secretKey, passphrase, position.Symbol, closePosResponse.Data.OrderID)
+	if detailsError != nil {
+		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
 	}
-
-	quoteAmount := floatSize * markPrice
 
 	dbOrder := models.Order{
 		Email:       position.UserEmail,
@@ -287,18 +272,38 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 		Side:        orderSide,
 		OrderType:   closeOrderPayload.OrderType,
 		Service:     position.Exchange,
-		QuoteAmount: quoteAmount,
 		Profit:      0.0,
 		PositionId:  position.Id,
-		OrderPrice:  fmt.Sprintf("%f", markPrice),
+		QuoteAmount: orderDetails.Data.FilledAmount,
+		OrderPrice:  fmt.Sprintf("%f", orderDetails.Data.PriceAvg),
+		Fee:         orderDetails.Data.Fee,
+		OrderId:     orderDetails.Data.OrderID,
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)
 	if saveErr != nil {
-		fmt.Println("---- unabel to save order in database ---")
+		fmt.Println("---- unabel to save order in database ---", saveErr)
 	}
 
-	return "successfully closed position", nil
+	posOpenPrice, openErr := strconv.ParseFloat(position.OpenPrice, 64)
+	if openErr != nil {
+		fmt.Println("---- err converting open price to float ---")
+	}
+
+	positionSize, sizeErr := strconv.ParseFloat(position.Size, 64)
+	if sizeErr != nil {
+		fmt.Println("---- err converting open price to float ---")
+	}
+
+	totalProfits := 0.0
+
+	if position.Side == "long" {
+		totalProfits = (orderDetails.Data.PriceAvg - posOpenPrice) * float64(positionSize)
+	} else if position.Side == "short" {
+		totalProfits = (posOpenPrice - orderDetails.Data.PriceAvg) * float64(positionSize)
+	}
+
+	return "successfully closed position", totalProfits, nil
 }
 
 func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
@@ -323,32 +328,34 @@ func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, sec
 		return "", closePosError
 	}
 
-	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
-
-	floatSize, convErr := strconv.ParseFloat(openOrderPayload.Size, 64)
-	if convErr != nil {
-		fmt.Println("--unable to convert size to float--")
+	orderDetails, detailsError := utils.BitgetOrderDetails(apiKey, secretKey, passphrase, position.Symbol, closePosResponse.Data.OrderID)
+	if detailsError != nil {
+		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
 	}
 
-	quoteAmount := floatSize * markPrice
+	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
 
 	dbOrder := models.Order{
-		Email:       position.UserEmail,
-		Symbol:      position.Symbol,
-		MarginCoin:  openOrderPayload.MarginCoin,
-		Size:        position.Size,
-		Side:        orderSide,
-		OrderType:   openOrderPayload.OrderType,
-		Service:     position.Exchange,
-		QuoteAmount: quoteAmount,
-		Profit:      0.0,
-		PositionId:  position.Id,
-		OrderPrice:  fmt.Sprintf("%f", markPrice),
+		Email:      position.UserEmail,
+		Symbol:     position.Symbol,
+		MarginCoin: openOrderPayload.MarginCoin,
+		Size:       position.Size,
+		Side:       orderSide,
+		OrderType:  openOrderPayload.OrderType,
+		Service:    position.Exchange,
+
+		Profit:     0.0,
+		PositionId: position.Id,
+
+		QuoteAmount: orderDetails.Data.FilledAmount,
+		OrderPrice:  fmt.Sprintf("%f", orderDetails.Data.PriceAvg),
+		Fee:         orderDetails.Data.Fee,
+		OrderId:     orderDetails.Data.OrderID,
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)
 	if saveErr != nil {
-		fmt.Println("---- unabel to save order in database ---")
+		fmt.Println("---- unabel to save order in database ---", saveErr)
 	}
 
 	return "successfully closed position", nil
@@ -376,14 +383,12 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		return "", closePosError
 	}
 
-	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
-
-	floatSize, convErr := strconv.ParseFloat(closeOrderPayload.Size, 64)
-	if convErr != nil {
-		fmt.Println("--unable to convert size to float--")
+	orderDetails, detailsError := utils.BitgetOrderDetails(apiKey, secretKey, passphrase, position.Symbol, closePosResponse.Data.OrderID)
+	if detailsError != nil {
+		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
 	}
 
-	quoteAmount := floatSize * markPrice
+	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
 
 	dbOrder := models.Order{
 		Email:       position.UserEmail,
@@ -393,15 +398,17 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		Side:        orderSide,
 		OrderType:   closeOrderPayload.OrderType,
 		Service:     position.Exchange,
-		QuoteAmount: quoteAmount,
 		Profit:      0.0,
 		PositionId:  position.Id,
-		OrderPrice:  fmt.Sprintf("%f", markPrice),
+		QuoteAmount: orderDetails.Data.FilledAmount,
+		OrderPrice:  fmt.Sprintf("%f", orderDetails.Data.PriceAvg),
+		Fee:         orderDetails.Data.Fee,
+		OrderId:     orderDetails.Data.OrderID,
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)
 	if saveErr != nil {
-		fmt.Println("---- unabel to save order in database ---")
+		fmt.Println("---- unabel to save order in database ---", saveErr)
 	}
 
 	return "successfully closed position", nil
@@ -552,24 +559,31 @@ func CloseSymbolBothPositions(
 		OrderDataList: []utils.OrderRequest{longOrder, shortOrder},
 	}
 
-	_, error := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
-	if error != nil {
-		fmt.Println("--- error opening positions ---", error)
+	batchOrdersResponse, batchError := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
+	if batchError != nil {
+		fmt.Println("--- error opening positions ---", batchError)
 		return
 	}
 
-	longSize, convErr := strconv.ParseFloat(longPos.Size, 64)
-	if convErr != nil {
-		fmt.Println("---- conversion error ----", convErr)
+	orderIds := batchOrdersResponse.Data.OrderInfo
+
+	var longOrderDetails utils.OrderDetailsResponse
+	var firstOrderError error
+	var shortOrderDetails utils.OrderDetailsResponse
+	var secondOrderError error
+
+	longOrderDetails, firstOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, shortPos.Symbol, orderIds[0].OrderID)
+	if firstOrderError != nil {
+		fmt.Println("----- first order details api has failed -----")
 	}
 
-	shortSize, convErr := strconv.ParseFloat(shortPos.Size, 64)
-	if convErr != nil {
-		fmt.Println("---- conversion error ----", convErr)
+	shortOrderDetails, secondOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, shortPos.Symbol, orderIds[1].OrderID)
+	if secondOrderError != nil {
+		fmt.Println("--- second order details api has failed ----")
 	}
 
-	longQuote := longSize * markPrice
-	shortQuote := shortSize * markPrice
+	longTotalProfit := longOrderDetails.Data.TotalProfits - math.Abs(longOrderDetails.Data.Fee)
+	shortTotalProfits := shortOrderDetails.Data.TotalProfits - math.Abs(shortOrderDetails.Data.Fee)
 
 	ordersPayload := []*models.Order{
 		{
@@ -580,10 +594,12 @@ func CloseSymbolBothPositions(
 			Side:        longOrder.Side,
 			OrderType:   longOrder.OrderType,
 			Service:     "bitget",
-			QuoteAmount: longQuote,
+			QuoteAmount: longOrderDetails.Data.FilledAmount,
 			Profit:      0.0,
 			PositionId:  longPos.Id,
-			OrderPrice:  fmt.Sprintf("%f", markPrice),
+			OrderPrice:  fmt.Sprintf("%f", longOrderDetails.Data.PriceAvg),
+			Fee:         longOrderDetails.Data.Fee,
+			OrderId:     longOrderDetails.Data.OrderID,
 		},
 		{
 			Email:       shortPos.UserEmail,
@@ -593,10 +609,12 @@ func CloseSymbolBothPositions(
 			Side:        shortOrder.Side,
 			OrderType:   shortOrder.OrderType,
 			Service:     "bitget",
-			QuoteAmount: shortQuote,
+			QuoteAmount: shortOrderDetails.Data.FilledAmount,
 			Profit:      0.0,
 			PositionId:  shortPos.Id,
-			OrderPrice:  fmt.Sprintf("%f", markPrice),
+			OrderPrice:  fmt.Sprintf("%f", shortOrderDetails.Data.PriceAvg),
+			Fee:         shortOrderDetails.Data.Fee,
+			OrderId:     shortOrderDetails.Data.OrderID,
 		},
 	}
 
@@ -606,33 +624,63 @@ func CloseSymbolBothPositions(
 		return
 	}
 
+	longPosOrders, orderError := models.GetOrdersByPositionIdAndSide(db, longPos.Id, "open_long")
+	if orderError != nil {
+		fmt.Println("--- unable to get position orders for pnl ---")
+	}
+
+	shortPosOrders, orderError := models.GetOrdersByPositionIdAndSide(db, shortPos.Id, "open_long")
+	if orderError != nil {
+		fmt.Println("--- unable to get position orders for pnl ---")
+	}
+
+	totalLongSize := 0.0
+	totalLongMargin := 0.0
+
+	totalShortSize := 0.0
+	totalShortMargin := 0.0
+
+	for _, order := range longPosOrders {
+		totalLongMargin += order.QuoteAmount
+		floatSize, err := strconv.ParseFloat(order.Size, 64)
+		if err != nil {
+			fmt.Println("--- unable to convert order size to float ---")
+		}
+		totalLongSize += floatSize
+	}
+
+	for _, order := range shortPosOrders {
+		totalShortMargin += order.QuoteAmount
+		floatSize, err := strconv.ParseFloat(order.Size, 64)
+		if err != nil {
+			fmt.Println("--- unable to convert order size to float ---")
+		}
+		totalShortSize += floatSize
+	}
+
 	updatedPositions := []models.Positions{
 		{
 			Id:           longPos.Id,
 			Symbol:       longPos.Symbol,
 			UnrealizedPl: "0.0",
 			MarkPrice:    fmt.Sprintf("%f", markPrice),
-			Size:         "0",
-			Margin:       "0",
-			TotalProfit:  0.0,
+			Size:         fmt.Sprintf("%f", totalLongSize),
+			Margin:       fmt.Sprintf("%f", totalLongMargin),
 			Status:       "closed",
+			TotalProfit:  longTotalProfit,
+			Fee:          longOrderDetails.Data.Fee,
 		},
 		{
 			Id:           shortPos.Id,
 			Symbol:       shortPos.Symbol,
 			UnrealizedPl: "0.0",
 			MarkPrice:    fmt.Sprintf("%f", markPrice),
-			Size:         "0",
-			Margin:       "0",
-			TotalProfit:  0.0,
+			Size:         fmt.Sprintf("%f", totalShortSize),
+			Margin:       fmt.Sprintf("%f", totalShortMargin),
 			Status:       "closed",
+			TotalProfit:  shortTotalProfits,
+			Fee:          shortOrderDetails.Data.Fee,
 		},
-	}
-
-	if isLongInProfit {
-		updatedPositions[0].TotalProfit = updatedPositions[0].TotalProfit + profits
-	} else {
-		updatedPositions[1].TotalProfit = updatedPositions[1].TotalProfit + profits
 	}
 
 	for _, position := range updatedPositions {

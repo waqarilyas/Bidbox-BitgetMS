@@ -37,7 +37,7 @@ jobs:
         run: |
           docker ps
       
-      - name: Cleaning Server
-        run: |
-          echo y | docker system prune
+#       - name: Cleaning Server
+#         run: |
+#           echo y | docker system prune
           

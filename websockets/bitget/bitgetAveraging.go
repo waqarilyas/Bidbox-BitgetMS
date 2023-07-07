@@ -662,7 +662,7 @@ func CloseSymbolBothPositions(
 		{
 			Id:           longPos.Id,
 			Symbol:       longPos.Symbol,
-			UnrealizedPl: "0.0",
+			UnrealizedPl: fmt.Sprintf("%f", longOrderDetails.Data.TotalProfits),
 			MarkPrice:    fmt.Sprintf("%f", markPrice),
 			Size:         fmt.Sprintf("%f", totalLongSize),
 			Margin:       fmt.Sprintf("%f", totalLongMargin),
@@ -673,7 +673,7 @@ func CloseSymbolBothPositions(
 		{
 			Id:           shortPos.Id,
 			Symbol:       shortPos.Symbol,
-			UnrealizedPl: "0.0",
+			UnrealizedPl: fmt.Sprintf("%f", shortOrderDetails.Data.TotalProfits),
 			MarkPrice:    fmt.Sprintf("%f", markPrice),
 			Size:         fmt.Sprintf("%f", totalShortSize),
 			Margin:       fmt.Sprintf("%f", totalShortMargin),

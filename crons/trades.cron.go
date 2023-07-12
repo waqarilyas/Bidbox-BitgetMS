@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
@@ -29,7 +30,7 @@ func NewUserTradesCron() *TradesCron {
 }
 
 func (server *TradesCron) Run() {
-	//var wg sync.WaitGroup
+	var wg sync.WaitGroup
 
 	key := models.Key{}
 	keys, err := key.FindKeysByService(server.DB, "bitget")
@@ -47,19 +48,19 @@ func (server *TradesCron) Run() {
 	}
 
 	for _, v := range *keys {
-		// wg.Add(1)
-		// go func(v models.Key) {
-		// 	defer wg.Done()
+		wg.Add(1)
+		go func(v models.Key) {
+			defer wg.Done()
 
-		if !v.Start {
-			continue
-		}
+			if !v.Start {
+				return
+			}
 
-		placeBitgetOrder(&v, v.CapitalPerTrade, server.DB, coinPairs)
-		//}(v)
+			placeBitgetOrder(&v, v.CapitalPerTrade, server.DB, coinPairs)
+		}(v)
 	}
 
-	//wg.Wait()
+	wg.Wait()
 }
 
 func GetTradeEligibleCoinSymbol(apiKey string, secretKey string, passphrase string, db *gorm.DB, v models.Key, coinPairs *[]models.CoinPair) (string, error) {

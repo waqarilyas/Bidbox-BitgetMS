@@ -138,6 +138,7 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 	}
 
 	if pnl < PERCENTAGE_PROFIT {
+		fmt.Println(pnl, "--- profit is less than defined by admin ---")
 		return
 	}
 
@@ -560,8 +561,8 @@ func CloseSymbolBothPositions(
 	}
 
 	batchOrdersResponse, batchError := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
-	if batchError != nil {
-		fmt.Println("--- error opening positions ---", batchError)
+	if len(batchOrdersResponse.Data.Failure) > 0 {
+		fmt.Println("--- error closing positions ---", batchError)
 		return
 	}
 

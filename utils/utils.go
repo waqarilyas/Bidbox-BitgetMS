@@ -258,6 +258,7 @@ func ConvertStrToFloat32(val string) float32 {
 }
 
 func SelectRandomElement(strings []string) string {
+	rand.Seed(time.Now().UnixNano())
 	index := rand.Intn(len(strings))
 	return strings[index]
 }

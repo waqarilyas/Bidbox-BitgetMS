@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jinzhu/gorm"
@@ -33,8 +32,8 @@ func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 
 	// tickerQueue := make(chan Snapshot)
 	var wg sync.WaitGroup
-	numWorkers := 5           //  number of worker goroutines
-	numTickersPerWorker := 10 // number of tickers to process per worker
+	numWorkers := 10          //  number of worker goroutines
+	numTickersPerWorker := 15 // number of tickers to process per worker
 	tickerBuffer := make(chan Snapshot, numTickersPerWorker*numWorkers)
 
 	// Start worker goroutines to process the tickers
@@ -79,8 +78,6 @@ func processTicker(buffer <-chan Snapshot, wg *sync.WaitGroup, db *gorm.DB) {
 		// Example: Call the HandleMarketUpdate function
 		HandleMarketUpdate(db, ticker)
 	}
-
-	time.Sleep(10 * time.Second)
 
 }
 

@@ -49,7 +49,7 @@ func Run() {
 	tradesCron := crons_service.TradesCron{}
 	tradesCron.DB = server.DB
 
-	// c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
+	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
 	// tradesCron.Run()
@@ -57,7 +57,7 @@ func Run() {
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
-	// bitget_WS.WebsocketTest()
+	bitget_WS.WebsocketTest()
 
 	// bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
 	// 	Action: "snapshot",
@@ -68,7 +68,7 @@ func Run() {
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "2000",
+	// 			MarkPrice: "1800",
 	// 		},
 	// 	},
 	// })

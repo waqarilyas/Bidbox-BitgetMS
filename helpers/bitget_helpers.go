@@ -84,7 +84,6 @@ func GetBitgetServerTimeStamp() string {
 
 func DecryptAllKeys(api_key string, secret_key string, passphrase string, service string) (string, string, string, error) {
 	api_key, err := DecryptStrings(api_key)
-	fmt.Println("in decrypt keys function")
 	if err != nil {
 
 		return "", "", "", err

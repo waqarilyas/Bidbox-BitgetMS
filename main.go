@@ -17,7 +17,7 @@ import (
 var server = controllers.Server{}
 var bitget_WS = bitget_websockets.Server{}
 
-func Run() {
+func Init() {
 	err := godotenv.Load()
 	log := logrus.New()
 
@@ -38,6 +38,11 @@ func Run() {
 	}
 
 	server.Initialize(os.Getenv("DB_DRIVER"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_PORT"), os.Getenv("DB_HOST"), os.Getenv("DB_NAME"))
+
+}
+
+func Run() {
+	Init()
 
 	c := cron.New()
 
@@ -79,4 +84,5 @@ func main() {
 	for {
 		time.Sleep(time.Second)
 	}
+
 }

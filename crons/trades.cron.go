@@ -10,10 +10,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
@@ -31,7 +29,7 @@ func NewUserTradesCron() *TradesCron {
 }
 
 func (server *TradesCron) Run() {
-	var wg sync.WaitGroup
+	//var wg sync.WaitGroup
 
 	key := models.Key{}
 	keys, err := key.FindKeysByService(server.DB, "bitget")
@@ -49,26 +47,22 @@ func (server *TradesCron) Run() {
 	}
 
 	for _, v := range *keys {
-		wg.Add(1)
-		go func(v models.Key) {
-			defer wg.Done()
+		// wg.Add(1)
+		// go func(v models.Key) {
+		// 	defer wg.Done()
 
-			val := int(math.Floor(float64(v.TradeAmount)/100.0) * 100)
-			cond := models.Conditions{}
-			c, err := cond.FindCondition(server.DB, val)
-			if err != nil {
-				return
-			}
+		if !v.Start {
+			continue
+		}
 
-			hedgeOrderAmount := float64(v.TradeAmount) * 0.08 / float64(c.Positions)
-			go placeBitgetOrder(&v, hedgeOrderAmount, server.DB, coinPairs)
-		}(v)
+		placeBitgetOrder(&v, v.CapitalPerTrade, server.DB, coinPairs)
+		//}(v)
 	}
 
-	wg.Wait()
+	//wg.Wait()
 }
 
-func GetTradeEligibleCoinSymbol(apiKey string, secretKey string, passphrase string, coinPairs *[]models.CoinPair) (string, error) {
+func GetTradeEligibleCoinSymbol(apiKey string, secretKey string, passphrase string, db *gorm.DB, v models.Key, coinPairs *[]models.CoinPair) (string, error) {
 	_, userAllOpenPositions, openPosError := utils.PerformBitgetPositionQuery(apiKey, secretKey, passphrase, "")
 	if openPosError != nil {
 		return "", openPosError
@@ -95,11 +89,27 @@ func GetTradeEligibleCoinSymbol(apiKey string, secretKey string, passphrase stri
 
 	}
 
+	log.Println(eligibleCoinSymbols)
+
 	if len(eligibleCoinSymbols) == 0 {
-		return "", errors.New("no eligible trade symbol foiund")
+		return "", errors.New("no eligible trade symbol found")
 	}
 
 	tradePair := utils.SelectRandomElement(eligibleCoinSymbols)
+
+	log.Println(tradePair)
+
+	pos := models.Positions{}
+
+	_, coins, err := pos.FindAllUserPositions(db, v.UserEmail)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if coins >= v.AllowedCoins {
+		log.Println(v.UserEmail)
+		return "", errors.New("coin limit reached")
+	}
 
 	return tradePair, nil
 
@@ -113,7 +123,7 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 		return
 	}
 
-	tradeSymbol, tradeSymbolError := GetTradeEligibleCoinSymbol(apiKey, secretKey, passphrase, coinPairs)
+	tradeSymbol, tradeSymbolError := GetTradeEligibleCoinSymbol(apiKey, secretKey, passphrase, db, *v, coinPairs)
 	if tradeSymbolError != nil {
 		fmt.Println("---- no eligible trade symbol found ----", tradeSymbolError)
 		return
@@ -155,6 +165,11 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 	var firstOrderError error
 	var shortOrderDetails utils.OrderDetailsResponse
 	var secondOrderError error
+
+	if len(batchOrdersResponse.Data.OrderInfo) == 0 {
+		log.Println(batchOrdersResponse.Data.Failure)
+		return
+	}
 
 	longOrderDetails, firstOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, tradeSymbol, orderIds[0].OrderID)
 	if firstOrderError != nil {

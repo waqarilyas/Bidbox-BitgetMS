@@ -82,6 +82,16 @@ func (position *Positions) UpdateOrCreatePosition(db *gorm.DB) (*Positions, erro
 	return existingPosition, nil
 }
 
+func (position *Positions) FindAllUserPositions(db *gorm.DB, email string) (*[]Positions, int, error) {
+	pos := []Positions{}
+	count := 0
+	err := db.Model(&Positions{}).Where("exchange = ? AND status = ? AND user_email = ?", "bitget", "opened", email).Find(&pos).Count(&count).Error
+	if err != nil {
+		return &[]Positions{}, 0, err
+	}
+	return &pos, count / 2, nil
+}
+
 func (u *Positions) GetUserOpenPositionsByExchange(db *gorm.DB, exchange string, userEmail string) (*[]Positions, error) {
 	positions := []Positions{}
 	err := db.Model(&Positions{}).Where("exchange = ? AND status = ? AND user_email = ?", exchange, "opened", userEmail).Find(&positions).Error

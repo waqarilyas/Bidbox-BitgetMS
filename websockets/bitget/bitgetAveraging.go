@@ -30,13 +30,11 @@ const (
 func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 	defer conn.Close()
 
-	// tickerQueue := make(chan Snapshot)
 	var wg sync.WaitGroup
 	numWorkers := 10          //  number of worker goroutines
 	numTickersPerWorker := 15 // number of tickers to process per worker
 	tickerBuffer := make(chan Snapshot, numTickersPerWorker*numWorkers)
 
-	// Start worker goroutines to process the tickers
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go processTicker(tickerBuffer, &wg, db)
@@ -60,7 +58,6 @@ func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 		// Push the ticker to the buffer for processing
 		tickerBuffer <- eventData
 		if len(tickerBuffer) == numTickersPerWorker*numWorkers {
-			// Buffer is full, wait for the current batch of tickers to be processed before accepting more
 			wg.Wait()
 		}
 	}
@@ -107,7 +104,11 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for _, position := range positions {
+			for key, position := range positions {
+
+				if key != "SEOSSUSDT_SUMCBL_kmtester@yopmail.com" {
+					continue
+				}
 
 				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}
@@ -518,10 +519,12 @@ func UpdateUserPositionsInDatabase(db *gorm.DB, longPos models.Positions, shortP
 			Size:         position.Available,
 			Margin:       position.Margin,
 			TotalProfit:  profits,
-			Layer:        currDbPos.Layer,
 		}
-
-		updateErr := models.UpdatePositionByID(db, currDbPos.Id, updatedPosition)
+		incr := 0
+		if currDbPos.Layer > 0 {
+			incr = 1
+		}
+		updateErr := models.UpdateAveragingPosition(db, currDbPos.Id, updatedPosition, incr)
 		if updateErr != nil {
 			fmt.Println("---- unable to update position in databaSe ----", updateErr)
 		}

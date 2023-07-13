@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kryptomind/bidboxapi/bitgetms/controllers"
 	crons_service "github.com/kryptomind/bidboxapi/bitgetms/crons"
+	"github.com/kryptomind/bidboxapi/bitgetms/models"
 	bitget_websockets "github.com/kryptomind/bidboxapi/bitgetms/websockets/bitget"
 	"github.com/robfig/cron/v3"
 )
@@ -49,7 +51,7 @@ func Run() {
 	tradesCron := crons_service.TradesCron{}
 	tradesCron.DB = server.DB
 
-	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
+	// c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
 	// tradesCron.Run()
@@ -57,21 +59,52 @@ func Run() {
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
-	bitget_WS.WebsocketTest()
+	// bitget_WS.WebsocketTest()
+
+	// statement := models.Statements{
+	// 	UserEmail:   "kmtester@yopmail.com",
+	// 	Exchange:    "bitget",
+	// 	Symbol:      "BTCUSDT",
+	// 	Side:        "long",
+	// 	ClosedPnl:   3.14,
+	// 	Size:        12,
+	// 	PositionId:  12,
+	// 	QuoteAmount: 3000.12,
+	// 	ProfitUSD:   12,
+	// }
+
+	// decrypted, _ := helpers.DecryptStrings("9QEUQG18aBpZCHMaFpIqDtZv0LsMjhOyLmJhz8c801WlE35c8neqDYzCtpCBF8Niq4LUcEBFHGiCfm58y7MU")
+	// fmt.Println("🚀 ~ file: main.go:77 ~ funcRun ~ decrypted:", decrypted)
+
+	// statement.CreateNewStatement(server.DB)
 
 	// bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
 	// 	Action: "snapshot",
 	// 	Arg: bitget_websockets.Subscription{
 	// 		InstType: "mc",
 	// 		Channel:  "ticker",
-	// 		InstID:   "ETHUSDT",
+	// 		InstID:   "EOSUSDT",
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "1800",
+	// 			MarkPrice: "0.6",
 	// 		},
 	// 	},
 	// })
+
+	posTest := models.Positions{
+		Symbol:       "SETHSUSDT_SUMCBL",
+		UnrealizedPl: "10",
+		MarkPrice:    "1900",
+		Size:         "0.002",
+		Margin:       "16",
+		Status:       "closed",
+		TotalProfit:  10,
+		Fee:          10,
+	}
+
+	error := models.UpdateAveragingPosition(server.DB, 665, posTest, 1)
+	fmt.Println("🚀 ~ file: main.go:108 ~ funcRun ~ error:", error)
 
 	// decryptRes,error:=utils.DecryptKeys()
 

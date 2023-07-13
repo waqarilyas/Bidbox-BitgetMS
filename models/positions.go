@@ -34,6 +34,32 @@ type Positions struct {
 	Fee             float64   `json:"fee"`
 }
 
+func UpdateAveragingPosition(db *gorm.DB, positionID int, newPositionData Positions, increment int) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Positions{}).
+			Where("id = ?", positionID).
+			Updates(newPositionData).Error; err != nil {
+			return err
+		}
+
+		if increment > 0 {
+			if err := tx.Model(&Positions{}).
+				Where("id = ?", positionID).
+				UpdateColumn("layer", gorm.Expr("layer + ?", increment)).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (position *Positions) CreateNewPosition(db *gorm.DB) (*Positions, error) {
 	err := db.Create(&position).Error
 	if err != nil {

@@ -52,23 +52,39 @@ func Run() {
 	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
-	// tradesCron.Run()
 	c.Start()
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
 	bitget_WS.WebsocketTest()
 
+	// statement := models.Statements{
+	// 	UserEmail:   "kmtester@yopmail.com",
+	// 	Exchange:    "bitget",
+	// 	Symbol:      "BTCUSDT",
+	// 	Side:        "long",
+	// 	ClosedPnl:   3.14,
+	// 	Size:        12,
+	// 	PositionId:  12,
+	// 	QuoteAmount: 3000.12,
+	// 	ProfitUSD:   12,
+	// }
+
+	// decrypted, _ := helpers.DecryptStrings("9QEUQG18aBpZCHMaFpIqDtZv0LsMjhOyLmJhz8c801WlE35c8neqDYzCtpCBF8Niq4LUcEBFHGiCfm58y7MU")
+	// fmt.Println("🚀 ~ file: main.go:77 ~ funcRun ~ decrypted:", decrypted)
+
+	// statement.CreateNewStatement(server.DB)
+
 	// bitget_websockets.HandleMarketUpdate(server.DB, bitget_websockets.Snapshot{
 	// 	Action: "snapshot",
 	// 	Arg: bitget_websockets.Subscription{
 	// 		InstType: "mc",
 	// 		Channel:  "ticker",
-	// 		InstID:   "ETHUSDT",
+	// 		InstID:   "EOSUSDT",
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "1800",
+	// 			MarkPrice: "0.6",
 	// 		},
 	// 	},
 	// })

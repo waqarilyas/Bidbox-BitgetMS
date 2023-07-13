@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kryptomind/bidboxapi/bitgetms/controllers"
 	crons_service "github.com/kryptomind/bidboxapi/bitgetms/crons"
-	"github.com/kryptomind/bidboxapi/bitgetms/models"
 	bitget_websockets "github.com/kryptomind/bidboxapi/bitgetms/websockets/bitget"
 	"github.com/robfig/cron/v3"
 )
@@ -51,15 +49,14 @@ func Run() {
 	tradesCron := crons_service.TradesCron{}
 	tradesCron.DB = server.DB
 
-	// c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
+	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
 	// ... add additional crons here
 
-	// tradesCron.Run()
 	c.Start()
 
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
-	// bitget_WS.WebsocketTest()
+	bitget_WS.WebsocketTest()
 
 	// statement := models.Statements{
 	// 	UserEmail:   "kmtester@yopmail.com",
@@ -91,20 +88,6 @@ func Run() {
 	// 		},
 	// 	},
 	// })
-
-	posTest := models.Positions{
-		Symbol:       "SETHSUSDT_SUMCBL",
-		UnrealizedPl: "10",
-		MarkPrice:    "1900",
-		Size:         "0.002",
-		Margin:       "16",
-		Status:       "closed",
-		TotalProfit:  10,
-		Fee:          10,
-	}
-
-	error := models.UpdateAveragingPosition(server.DB, 665, posTest, 1)
-	fmt.Println("🚀 ~ file: main.go:108 ~ funcRun ~ error:", error)
 
 	// decryptRes,error:=utils.DecryptKeys()
 

@@ -23,7 +23,7 @@ type Ticker struct {
 
 const (
 	PERCENTAGE_PROFIT = 1.0
-	ALLOWED_LAYERS    = 2
+	ALLOWED_LAYERS    = 10
 )
 
 func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
@@ -180,9 +180,11 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
-		_, avgPosError := AverageUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
-		if avgPosError != nil {
-			return
+		if shortPos.Layer < ALLOWED_LAYERS {
+			_, avgPosError := AverageUserPosition(db, shortPos, apiKey, secretKey, passphrase, markPrice)
+			if avgPosError != nil {
+				return
+			}
 		}
 
 		shortPos.Layer += 1
@@ -214,9 +216,11 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			return
 		}
 
-		_, avgPosError := AverageUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
-		if avgPosError != nil {
-			return
+		if longPos.Layer < ALLOWED_LAYERS {
+			_, avgPosError := AverageUserPosition(db, longPos, apiKey, secretKey, passphrase, markPrice)
+			if avgPosError != nil {
+				return
+			}
 		}
 
 		longPos.Layer += 1

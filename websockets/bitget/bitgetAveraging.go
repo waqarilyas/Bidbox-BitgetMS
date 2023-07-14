@@ -8,11 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/websocket"
-	"github.com/jinzhu/gorm"
-
 	"math"
 
+	"github.com/gorilla/websocket"
+	"github.com/jinzhu/gorm"
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
 	"github.com/kryptomind/bidboxapi/bitgetms/utils"
 )
@@ -104,11 +103,7 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 
 		if len(positions) > 0 {
 
-			for key, position := range positions {
-
-				if key != "SEOSSUSDT_SUMCBL_kmtester@yopmail.com" {
-					continue
-				}
+			for _, position := range positions {
 
 				HandlePositionsOnTicker(floatMarkPrice, position, db, formattedCoinsymbol)
 			}
@@ -160,7 +155,7 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 	if isLongInProfit {
 
 		if longPos.Layer > 0 {
-			// close whole position because the counter position is in profit
+
 			floatSize, err := strconv.ParseFloat(longPos.Size, 64)
 			if err != nil {
 				fmt.Println(" -- unable to parse size to float ---")
@@ -193,11 +188,6 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 		shortPos.Layer += 1
 
 	} else {
-
-		// if shortPos.Layer >= ALLOWED_LAYERS {
-		// 	fmt.Println("--- num layers reached ----")
-		// 	return
-		// }
 
 		if shortPos.Layer > 0 {
 			// close whole position because the counter position is in profit
@@ -286,6 +276,12 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 	if saveErr != nil {
 		fmt.Println("---- unabel to save order in database ---", saveErr)
 	}
+
+	// statements saving logic here
+
+	CreateStatement(db, position, orderDetails)
+
+	//statements logic ends here
 
 	posOpenPrice, openErr := strconv.ParseFloat(position.OpenPrice, 64)
 	if openErr != nil {
@@ -589,6 +585,12 @@ func CloseSymbolBothPositions(
 	longTotalProfit := longOrderDetails.Data.TotalProfits - math.Abs(longOrderDetails.Data.Fee)
 	shortTotalProfits := shortOrderDetails.Data.TotalProfits - math.Abs(shortOrderDetails.Data.Fee)
 
+	if isLongInProfit {
+		longTotalProfit = profits
+	} else {
+		shortTotalProfits = profits
+	}
+
 	ordersPayload := []*models.Order{
 		{
 			Email:       longPos.UserEmail,
@@ -621,6 +623,12 @@ func CloseSymbolBothPositions(
 			OrderId:     shortOrderDetails.Data.OrderID,
 		},
 	}
+
+	//statements saving logic starts here
+	CreateStatement(db, longPos, longOrderDetails)
+	CreateStatement(db, shortPos, shortOrderDetails)
+
+	//statements logic end here
 
 	_, err := models.SaveMultipleOrders(db, ordersPayload)
 	if err != nil {
@@ -696,5 +704,37 @@ func CloseSymbolBothPositions(
 
 		fmt.Println("--- position updated in database succesfully ---")
 	}
+
+}
+
+func CreateStatement(db *gorm.DB, position models.Positions, orderDetails utils.OrderDetailsResponse) *models.Statements {
+	floatSize, _ := strconv.ParseFloat(position.Size, 64)
+	dbStatement := models.Statements{
+		UserEmail:   position.UserEmail,
+		Exchange:    position.Exchange,
+		Symbol:      position.Symbol,
+		Side:        position.Side,
+		ClosedPnl:   orderDetails.Data.TotalProfits,
+		Size:        floatSize,
+		PositionId:  position.Id,
+		QuoteAmount: floatSize * orderDetails.Data.PriceAvg,
+		ProfitUSD:   position.TotalProfit - position.Fee,
+	}
+
+	var statementRes *models.Statements
+
+	if dbStatement.ProfitUSD > 0 {
+		var statementErr error
+		statementRes, statementErr = dbStatement.CreateNewStatement(db)
+		if statementErr != nil {
+			fmt.Println("---- error saving user statement in database ----", statementErr)
+			return nil
+		}
+		fmt.Println("🚀 ~ file: bitgetAveraging.go:731 ~ funcCreateStatement ~ statementRes:", statementRes)
+	} else {
+		fmt.Println("---- statement not saved because total profit is  ----", orderDetails.Data.TotalProfits, " ---- and fee is ---", orderDetails.Data.Fee)
+	}
+
+	return statementRes
 
 }

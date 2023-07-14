@@ -80,11 +80,11 @@ func Run() {
 	// 	Arg: bitget_websockets.Subscription{
 	// 		InstType: "mc",
 	// 		Channel:  "ticker",
-	// 		InstID:   "EOSUSDT",
+	// 		InstID:   "BTCUSDT",
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "0.6",
+	// 			MarkPrice: "30400",
 	// 		},
 	// 	},
 	// })

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"math"
 
@@ -723,6 +724,8 @@ func CreateStatement(db *gorm.DB, position models.Positions, orderDetails utils.
 		PositionId:  position.Id,
 		QuoteAmount: floatSize * orderDetails.Data.PriceAvg,
 		ProfitUSD:   position.TotalProfit - position.Fee,
+		CreatedTime: time.Now(),
+		UpdatedTime: time.Now(),
 	}
 
 	var statementRes *models.Statements

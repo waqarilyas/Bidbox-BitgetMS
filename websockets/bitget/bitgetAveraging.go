@@ -22,7 +22,7 @@ type Ticker struct {
 }
 
 const (
-	PERCENTAGE_PROFIT = 0.5
+	PERCENTAGE_PROFIT = 1.0
 	ALLOWED_LAYERS    = 2
 )
 

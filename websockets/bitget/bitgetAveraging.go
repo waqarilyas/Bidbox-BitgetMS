@@ -31,8 +31,8 @@ func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 	defer conn.Close()
 
 	var wg sync.WaitGroup
-	numWorkers := 10          //  number of worker goroutines
-	numTickersPerWorker := 15 // number of tickers to process per worker
+	numWorkers := 100         //  number of worker goroutines
+	numTickersPerWorker := 10 // number of tickers to process per worker
 	tickerBuffer := make(chan Snapshot, numTickersPerWorker*numWorkers)
 
 	for i := 0; i < numWorkers; i++ {
@@ -53,6 +53,7 @@ func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 		if err != nil {
 			log.Println("WebSocket message parsing error:", err)
 			continue
+
 		}
 
 		// Push the ticker to the buffer for processing
@@ -100,6 +101,7 @@ func HandleMarketUpdate(db *gorm.DB, ticker Snapshot) {
 		positions, err := position.GetGroupedOpenPositionsByExchangeAndCoinSymbol(db, "bitget", formattedCoinsymbol)
 		if err != nil {
 			fmt.Println("---- unable to handle coin price event -----", err)
+			return
 		}
 
 		if len(positions) > 0 {

@@ -35,9 +35,6 @@ func (server *TradesCron) RunPositionsCron() {
 				return
 			}
 
-			if v.UserEmail != "kmtester@yopmail.com" {
-				return
-			}
 			handleOpenPositions(server.DB, v)
 		}(v)
 	}

@@ -340,6 +340,11 @@ func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, sec
 
 	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
 
+	orderPrice := orderDetails.Data.PriceAvg
+	if orderPrice == 0 {
+		orderPrice = markPrice
+	}
+
 	dbOrder := models.Order{
 		Email:      position.UserEmail,
 		Symbol:     position.Symbol,
@@ -353,7 +358,7 @@ func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, sec
 		PositionId: position.Id,
 
 		QuoteAmount: orderDetails.Data.FilledAmount,
-		OrderPrice:  fmt.Sprintf("%f", orderDetails.Data.PriceAvg),
+		OrderPrice:  fmt.Sprintf("%f", orderPrice),
 		Fee:         orderDetails.Data.Fee,
 		OrderId:     orderDetails.Data.OrderID,
 	}
@@ -393,6 +398,11 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
 	}
 
+	orderPrice := orderDetails.Data.PriceAvg
+	if orderPrice == 0 {
+		orderPrice = markPrice
+	}
+
 	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
 
 	dbOrder := models.Order{
@@ -406,7 +416,7 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		Profit:      0.0,
 		PositionId:  position.Id,
 		QuoteAmount: orderDetails.Data.FilledAmount,
-		OrderPrice:  fmt.Sprintf("%f", orderDetails.Data.PriceAvg),
+		OrderPrice:  fmt.Sprintf("%f", orderPrice),
 		Fee:         orderDetails.Data.Fee,
 		OrderId:     orderDetails.Data.OrderID,
 	}
@@ -480,7 +490,7 @@ func GetPosPnl(position models.Positions, markPrice float64) (float64, error) {
 		return 0.0, error
 	}
 
-	floatPosSize, error := strconv.ParseFloat(position.OpenPrice, 64)
+	floatPosSize, error := strconv.ParseFloat(position.Size, 64)
 	if error != nil {
 		fmt.Println("-- error converting position entry price to float")
 		return 0.0, error
@@ -598,6 +608,16 @@ func CloseSymbolBothPositions(
 		shortTotalProfits = profits
 	}
 
+	longOrderPrice := longOrderDetails.Data.PriceAvg
+	if longOrderPrice == 0 {
+		longOrderPrice = markPrice
+	}
+
+	shortOrderPrice := shortOrderDetails.Data.PriceAvg
+	if shortOrderPrice == 0 {
+		shortOrderPrice = markPrice
+	}
+
 	ordersPayload := []*models.Order{
 		{
 			Email:       longPos.UserEmail,
@@ -610,7 +630,7 @@ func CloseSymbolBothPositions(
 			QuoteAmount: longOrderDetails.Data.FilledAmount,
 			Profit:      0.0,
 			PositionId:  longPos.Id,
-			OrderPrice:  fmt.Sprintf("%f", longOrderDetails.Data.PriceAvg),
+			OrderPrice:  fmt.Sprintf("%f", longOrderPrice),
 			Fee:         longOrderDetails.Data.Fee,
 			OrderId:     longOrderDetails.Data.OrderID,
 		},
@@ -625,7 +645,7 @@ func CloseSymbolBothPositions(
 			QuoteAmount: shortOrderDetails.Data.FilledAmount,
 			Profit:      0.0,
 			PositionId:  shortPos.Id,
-			OrderPrice:  fmt.Sprintf("%f", shortOrderDetails.Data.PriceAvg),
+			OrderPrice:  fmt.Sprintf("%f", shortOrderPrice),
 			Fee:         shortOrderDetails.Data.Fee,
 			OrderId:     shortOrderDetails.Data.OrderID,
 		},

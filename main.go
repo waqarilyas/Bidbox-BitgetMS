@@ -49,8 +49,8 @@ func Run() {
 	tradesCron := crons_service.TradesCron{}
 	tradesCron.DB = server.DB
 
-	c.AddFunc("@every 10m", tradesCron.Run) // Run Cron After Every 10 Minutes
-	// ... add additional crons here
+	c.AddFunc("@every 10m", tradesCron.Run)              // Run Cron After Every 10 Minutes
+	c.AddFunc("@every 10m", tradesCron.RunPositionsCron) // Run Cron After Every 10 Minutes
 
 	c.Start()
 
@@ -80,11 +80,11 @@ func Run() {
 	// 	Arg: bitget_websockets.Subscription{
 	// 		InstType: "mc",
 	// 		Channel:  "ticker",
-	// 		InstID:   "BTCUSDT",
+	// 		InstID:   "EOSUSDT",
 	// 	},
 	// 	Data: []bitget_websockets.SnapshotData{
 	// 		{
-	// 			MarkPrice: "30400",
+	// 			MarkPrice: "0.7585",
 	// 		},
 	// 	},
 	// })

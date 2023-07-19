@@ -130,7 +130,7 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 		return
 	}
 
-	orderSize, _, err := utils.GetSize(tradeSymbol, amount)
+	orderSize, price, err := utils.GetSize(tradeSymbol, amount)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -187,7 +187,7 @@ func placeBitgetOrder(v *models.Key, amount float64, db *gorm.DB, coinPairs *[]m
 		fmt.Println("--- unable to update positions in database ---")
 	}
 
-	_, orderErr := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrderDetails.Data, longOrderDetails.Data, dbPositions)
+	_, orderErr := SaveOrdersInDatabase(db, v, tradeSymbol, amount, "SUSDT", shortOrderDetails.Data, longOrderDetails.Data, dbPositions, price)
 
 	if orderErr != nil {
 		fmt.Println("----  error saving orders ----", err)
@@ -255,7 +255,7 @@ func GenerateBitgetSignature(apiSecret string, apiKey string, passphrase string,
 	return signature
 }
 
-func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder utils.OrderDetails, longOrder utils.OrderDetails, positions []models.Positions) ([]*models.Order, error) {
+func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAmount float64, marginCoin string, shortOrder utils.OrderDetails, longOrder utils.OrderDetails, positions []models.Positions, markPrice float64) ([]*models.Order, error) {
 	var longPos models.Positions
 	var shortPos models.Positions
 
@@ -267,6 +267,16 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			shortPos = position
 		}
 
+	}
+
+	shortOrderPrice := shortOrder.PriceAvg
+	if shortOrderPrice == 0 {
+		shortOrderPrice = markPrice
+	}
+
+	longOrderPrice := longOrder.PriceAvg
+	if longOrderPrice == 0 {
+		longOrderPrice = markPrice
 	}
 
 	ordersPayload := []*models.Order{
@@ -281,7 +291,7 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			Profit:      0.0,
 			PositionId:  shortPos.Id,
 			QuoteAmount: shortOrder.FilledAmount,
-			OrderPrice:  fmt.Sprintf("%f", shortOrder.PriceAvg),
+			OrderPrice:  fmt.Sprintf("%f", shortOrderPrice),
 			Fee:         shortOrder.Fee,
 			OrderId:     shortOrder.OrderID,
 		},
@@ -296,7 +306,7 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			Profit:      0.0,
 			PositionId:  longPos.Id,
 			QuoteAmount: longOrder.FilledAmount,
-			OrderPrice:  fmt.Sprintf("%f", longOrder.PriceAvg),
+			OrderPrice:  fmt.Sprintf("%f", longOrderPrice),
 			Fee:         longOrder.Fee,
 			OrderId:     longOrder.OrderID,
 		},

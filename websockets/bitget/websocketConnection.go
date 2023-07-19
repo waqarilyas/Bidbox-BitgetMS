@@ -36,20 +36,6 @@ func (s *Server) WebsocketTest() {
 
 	pingTicker := time.NewTicker(20 * time.Second)
 
-	// go func() {
-	// 	for {
-	// 		position := models.Positions{}
-	// 		positions, err := position.GetOpenPositionsByExchange(s.DB, "bitget")
-	// 		if err != nil {
-	// 			log.Println("Error fetching positions:", err)
-	// 		} else {
-	// 			cache.Positions = *positions
-	// 			log.Println("Positions cache updated successfully.")
-	// 		}
-	// 		time.Sleep(10 * time.Second)
-	// 	}
-	// }()
-
 	for {
 		conn, err := connectWebSocket()
 		if err != nil {

@@ -31,7 +31,7 @@ func HandleWebSocketMessages(conn *websocket.Conn, db *gorm.DB) {
 	defer conn.Close()
 
 	var wg sync.WaitGroup
-	numWorkers := 100         //  number of worker goroutines
+	numWorkers := 15          //  number of worker goroutines
 	numTickersPerWorker := 10 // number of tickers to process per worker
 	tickerBuffer := make(chan Snapshot, numTickersPerWorker*numWorkers)
 

@@ -17,6 +17,8 @@ func NewPositionSyncCron() *TradesCron {
 }
 
 func (server *TradesCron) RunPositionsCron() {
+	fmt.Println("--- positions cron started ---")
+
 	var wg sync.WaitGroup
 
 	key := models.Key{}

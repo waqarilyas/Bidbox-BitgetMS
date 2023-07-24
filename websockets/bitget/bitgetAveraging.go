@@ -252,7 +252,7 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 
 	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, closeOrderPayload)
 	if closePosError != nil {
-		fmt.Println(" --- unable to close position ---")
+		fmt.Println(" --- unable to close position ---", closePosResponse)
 		fmt.Println(" --- user email ---", position.UserEmail)
 		fmt.Println(" --- coinSymbol ---", position.Symbol)
 		return "", 0.0, closePosError

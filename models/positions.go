@@ -162,3 +162,20 @@ func UpdatePositionByID(db *gorm.DB, positionID int, newPositionData Positions) 
 	}
 	return nil
 }
+
+func (u *Positions) GetGroupedOpenPositionsByExchange(db *gorm.DB, exchange string) (map[string][]Positions, error) {
+	positions := []Positions{}
+	err := db.Model(&Positions{}).Where("exchange = ? AND status = ? ", exchange, "opened").Find(&positions).Error
+	if err != nil {
+		return nil, err
+	}
+
+	groupedPositions := make(map[string][]Positions)
+
+	for _, pos := range positions {
+		key := pos.Symbol + "_" + pos.UserEmail
+		groupedPositions[key] = append(groupedPositions[key], pos)
+	}
+
+	return groupedPositions, nil
+}

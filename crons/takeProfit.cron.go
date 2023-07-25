@@ -118,10 +118,7 @@ func handleUserPositions(db *gorm.DB, email string, positions []models.Positions
 		groupedDataMap[coinSymbol] = groupedData
 	}
 
-	for symbol, groupedPos := range groupedDataMap {
-		if symbol != "SXRPSUSDT_SUMCBL" {
-			continue
-		}
+	for _, groupedPos := range groupedDataMap {
 		handleGroupedPos(db, groupedPos, apiKey, secretKey, passphrase)
 	}
 }

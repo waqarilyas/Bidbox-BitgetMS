@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"math"
-
 	"github.com/gorilla/websocket"
 	"github.com/jinzhu/gorm"
 	"github.com/kryptomind/bidboxapi/bitgetms/models"
@@ -188,9 +186,9 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 			if avgPosError != nil {
 				return
 			}
-		}
+			shortPos.Layer += 1
 
-		shortPos.Layer += 1
+		}
 
 	} else {
 
@@ -232,8 +230,6 @@ func HandlePositionsOnTicker(markPrice float64, positions []models.Positions, db
 
 	UpdateUserPositionsInDatabase(db, longPos, shortPos, apiKey, secretKey, passphrase, formattedCoinsymbol, positionProfitUSD)
 
-	// fmt.Println("🚀 ~ file: bitgetAveraging.go:136 ~ funcHandlePositionsOnTicker ~ pnl:", pnl)
-
 }
 
 func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, float64, error) {
@@ -250,65 +246,12 @@ func CloseUserPosition(db *gorm.DB, position models.Positions, apiKey string, se
 		OrderType:  "market",
 	}
 
-	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, closeOrderPayload)
-	if closePosError != nil {
-		fmt.Println(" --- unable to close position ---", closePosResponse)
-		fmt.Println(" --- user email ---", position.UserEmail)
-		fmt.Println(" --- coinSymbol ---", position.Symbol)
-		return "", 0.0, closePosError
+	_, err := ExecuteAndSaveOrder(db, closeOrderPayload, position, apiKey, secretKey, passphrase, markPrice, orderSide)
+	if err != nil {
+		return "error opening position", 0.0, err
 	}
 
-	orderDetails, detailsError := utils.BitgetOrderDetails(apiKey, secretKey, passphrase, position.Symbol, closePosResponse.Data.OrderID)
-	if detailsError != nil {
-		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
-	}
-
-	dbOrder := models.Order{
-		Email:       position.UserEmail,
-		Symbol:      position.Symbol,
-		MarginCoin:  closeOrderPayload.MarginCoin,
-		Size:        position.Size,
-		Side:        orderSide,
-		OrderType:   closeOrderPayload.OrderType,
-		Service:     position.Exchange,
-		Profit:      0.0,
-		PositionId:  position.Id,
-		QuoteAmount: orderDetails.Data.FilledAmount,
-		OrderPrice:  fmt.Sprintf("%f", orderDetails.Data.PriceAvg),
-		Fee:         orderDetails.Data.Fee,
-		OrderId:     orderDetails.Data.OrderID,
-	}
-
-	_, saveErr := dbOrder.SaveOrder(db)
-	if saveErr != nil {
-		fmt.Println("---- unabel to save order in database ---", saveErr)
-	}
-
-	// statements saving logic here
-
-	CreateStatement(db, position, orderDetails)
-
-	//statements logic ends here
-
-	posOpenPrice, openErr := strconv.ParseFloat(position.OpenPrice, 64)
-	if openErr != nil {
-		fmt.Println("---- err converting open price to float ---")
-	}
-
-	positionSize, sizeErr := strconv.ParseFloat(position.Size, 64)
-	if sizeErr != nil {
-		fmt.Println("---- err converting open price to float ---")
-	}
-
-	totalProfits := 0.0
-
-	if position.Side == "long" {
-		totalProfits = (orderDetails.Data.PriceAvg - posOpenPrice) * float64(positionSize)
-	} else if position.Side == "short" {
-		totalProfits = (posOpenPrice - orderDetails.Data.PriceAvg) * float64(positionSize)
-	}
-
-	return "successfully closed position", totalProfits, nil
+	return "successfully closed position", 0.0, nil
 }
 
 func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
@@ -325,50 +268,12 @@ func OpenUserPosition(db *gorm.DB, position models.Positions, apiKey string, sec
 		OrderType:  "market",
 	}
 
-	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, openOrderPayload)
-	if closePosError != nil {
-		fmt.Println(" --- unable to close position ---")
-		fmt.Println(" --- user email ---", position.UserEmail)
-		fmt.Println(" --- coinSymbol ---", position.Symbol)
-		return "", closePosError
+	_, err := ExecuteAndSaveOrder(db, openOrderPayload, position, apiKey, secretKey, passphrase, markPrice, orderSide)
+	if err != nil {
+		return "error opening position", err
 	}
 
-	orderDetails, detailsError := utils.BitgetOrderDetails(apiKey, secretKey, passphrase, position.Symbol, closePosResponse.Data.OrderID)
-	if detailsError != nil {
-		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
-	}
-
-	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
-
-	orderPrice := orderDetails.Data.PriceAvg
-	if orderPrice == 0 {
-		orderPrice = markPrice
-	}
-
-	dbOrder := models.Order{
-		Email:      position.UserEmail,
-		Symbol:     position.Symbol,
-		MarginCoin: openOrderPayload.MarginCoin,
-		Size:       position.Size,
-		Side:       orderSide,
-		OrderType:  openOrderPayload.OrderType,
-		Service:    position.Exchange,
-
-		Profit:     0.0,
-		PositionId: position.Id,
-
-		QuoteAmount: orderDetails.Data.FilledAmount,
-		OrderPrice:  fmt.Sprintf("%f", orderPrice),
-		Fee:         orderDetails.Data.Fee,
-		OrderId:     orderDetails.Data.OrderID,
-	}
-
-	_, saveErr := dbOrder.SaveOrder(db)
-	if saveErr != nil {
-		fmt.Println("---- unabel to save order in database ---", saveErr)
-	}
-
-	return "successfully closed position", nil
+	return "successfully opened position", nil
 }
 
 func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, secretKey string, passphrase string, markPrice float64) (string, error) {
@@ -385,7 +290,24 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		OrderType:  "market",
 	}
 
-	closePosResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, closeOrderPayload)
+	_, err := ExecuteAndSaveOrder(db, closeOrderPayload, position, apiKey, secretKey, passphrase, markPrice, orderSide)
+	if err != nil {
+		return "error closing position", err
+	}
+
+	return "successfully closed position", nil
+}
+
+func ExecuteAndSaveOrder(
+	db *gorm.DB,
+	payload utils.NormalOrderRequest,
+	position models.Positions,
+	apiKey string,
+	secretKey string,
+	passphrase string,
+	markPrice float64,
+	orderSide string) (string, error) {
+	orderResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, payload)
 	if closePosError != nil {
 		fmt.Println(" --- unable to close position ---")
 		fmt.Println(" --- user email ---", position.UserEmail)
@@ -393,32 +315,24 @@ func AverageUserPosition(db *gorm.DB, position models.Positions, apiKey string, 
 		return "", closePosError
 	}
 
-	orderDetails, detailsError := utils.BitgetOrderDetails(apiKey, secretKey, passphrase, position.Symbol, closePosResponse.Data.OrderID)
-	if detailsError != nil {
-		fmt.Println("----= unable to get oprder details after closing position ----", detailsError)
-	}
-
-	orderPrice := orderDetails.Data.PriceAvg
-	if orderPrice == 0 {
-		orderPrice = markPrice
-	}
-
-	fmt.Sprintln("--- user position closed successfully ---", closePosResponse)
+	floatSize, _ := strconv.ParseFloat(position.Size, 64)
+	fillAmount := floatSize * markPrice
 
 	dbOrder := models.Order{
 		Email:       position.UserEmail,
 		Symbol:      position.Symbol,
-		MarginCoin:  closeOrderPayload.MarginCoin,
+		MarginCoin:  payload.MarginCoin,
 		Size:        position.Size,
 		Side:        orderSide,
-		OrderType:   closeOrderPayload.OrderType,
+		OrderType:   payload.OrderType,
 		Service:     position.Exchange,
 		Profit:      0.0,
 		PositionId:  position.Id,
-		QuoteAmount: orderDetails.Data.FilledAmount,
-		OrderPrice:  fmt.Sprintf("%f", orderPrice),
-		Fee:         orderDetails.Data.Fee,
-		OrderId:     orderDetails.Data.OrderID,
+		QuoteAmount: fillAmount,
+		OrderPrice:  fmt.Sprintf("%f", markPrice),
+		Fee:         0.0,
+		OrderId:     orderResponse.Data.OrderID,
+		IsHandled:   false,
 	}
 
 	_, saveErr := dbOrder.SaveOrder(db)
@@ -541,7 +455,6 @@ func UpdateUserPositionsInDatabase(db *gorm.DB, longPos models.Positions, shortP
 		if updateErr != nil {
 			fmt.Println("---- unable to update position in databaSe ----", updateErr)
 		}
-
 	}
 
 }
@@ -579,44 +492,16 @@ func CloseSymbolBothPositions(
 	batchOrdersResponse, batchError := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
 	if len(batchOrdersResponse.Data.Failure) > 0 {
 		fmt.Println("--- error closing positions ---", batchError)
-		return
+		// return
 	}
 
 	orderIds := batchOrdersResponse.Data.OrderInfo
 
-	var longOrderDetails utils.OrderDetailsResponse
-	var firstOrderError error
-	var shortOrderDetails utils.OrderDetailsResponse
-	var secondOrderError error
+	longSize, _ := strconv.ParseFloat(longOrder.Size, 64)
+	shortSize, _ := strconv.ParseFloat(shortOrder.Size, 64)
 
-	longOrderDetails, firstOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, shortPos.Symbol, orderIds[0].OrderID)
-	if firstOrderError != nil {
-		fmt.Println("----- first order details api has failed -----")
-	}
-
-	shortOrderDetails, secondOrderError = utils.BitgetOrderDetails(apiKey, secretKey, passphrase, shortPos.Symbol, orderIds[1].OrderID)
-	if secondOrderError != nil {
-		fmt.Println("--- second order details api has failed ----")
-	}
-
-	longTotalProfit := longOrderDetails.Data.TotalProfits - math.Abs(longOrderDetails.Data.Fee)
-	shortTotalProfits := shortOrderDetails.Data.TotalProfits - math.Abs(shortOrderDetails.Data.Fee)
-
-	if isLongInProfit {
-		longTotalProfit = profits
-	} else {
-		shortTotalProfits = profits
-	}
-
-	longOrderPrice := longOrderDetails.Data.PriceAvg
-	if longOrderPrice == 0 {
-		longOrderPrice = markPrice
-	}
-
-	shortOrderPrice := shortOrderDetails.Data.PriceAvg
-	if shortOrderPrice == 0 {
-		shortOrderPrice = markPrice
-	}
+	longFilled := longSize * markPrice
+	shortFilled := shortSize * markPrice
 
 	ordersPayload := []*models.Order{
 		{
@@ -627,12 +512,13 @@ func CloseSymbolBothPositions(
 			Side:        longOrder.Side,
 			OrderType:   longOrder.OrderType,
 			Service:     "bitget",
-			QuoteAmount: longOrderDetails.Data.FilledAmount,
+			QuoteAmount: longFilled,
 			Profit:      0.0,
 			PositionId:  longPos.Id,
-			OrderPrice:  fmt.Sprintf("%f", longOrderPrice),
-			Fee:         longOrderDetails.Data.Fee,
-			OrderId:     longOrderDetails.Data.OrderID,
+			OrderPrice:  fmt.Sprintf("%f", markPrice),
+			Fee:         0.0,
+			OrderId:     orderIds[0].OrderID,
+			IsHandled:   false,
 		},
 		{
 			Email:       shortPos.UserEmail,
@@ -642,20 +528,15 @@ func CloseSymbolBothPositions(
 			Side:        shortOrder.Side,
 			OrderType:   shortOrder.OrderType,
 			Service:     "bitget",
-			QuoteAmount: shortOrderDetails.Data.FilledAmount,
+			QuoteAmount: shortFilled,
 			Profit:      0.0,
 			PositionId:  shortPos.Id,
-			OrderPrice:  fmt.Sprintf("%f", shortOrderPrice),
-			Fee:         shortOrderDetails.Data.Fee,
-			OrderId:     shortOrderDetails.Data.OrderID,
+			OrderPrice:  fmt.Sprintf("%f", markPrice),
+			Fee:         0,
+			OrderId:     orderIds[1].OrderID,
+			IsHandled:   false,
 		},
 	}
-
-	//statements saving logic starts here
-	CreateStatement(db, longPos, longOrderDetails)
-	CreateStatement(db, shortPos, shortOrderDetails)
-
-	//statements logic end here
 
 	_, err := models.SaveMultipleOrders(db, ordersPayload)
 	if err != nil {
@@ -699,26 +580,21 @@ func CloseSymbolBothPositions(
 
 	updatedPositions := []models.Positions{
 		{
-			Id:           longPos.Id,
-			Symbol:       longPos.Symbol,
-			UnrealizedPl: fmt.Sprintf("%f", longOrderDetails.Data.TotalProfits),
-			MarkPrice:    fmt.Sprintf("%f", markPrice),
-			Size:         fmt.Sprintf("%f", totalLongSize),
-			Margin:       fmt.Sprintf("%f", totalLongMargin),
-			Status:       "closed",
-			TotalProfit:  longTotalProfit,
-			Fee:          longOrderDetails.Data.Fee,
+			Id:        longPos.Id,
+			Symbol:    longPos.Symbol,
+			MarkPrice: fmt.Sprintf("%f", markPrice),
+			Size:      fmt.Sprintf("%f", totalLongSize),
+			Margin:    fmt.Sprintf("%f", totalLongMargin),
+			Status:    "closed",
 		},
 		{
-			Id:           shortPos.Id,
-			Symbol:       shortPos.Symbol,
-			UnrealizedPl: fmt.Sprintf("%f", shortOrderDetails.Data.TotalProfits),
-			MarkPrice:    fmt.Sprintf("%f", markPrice),
-			Size:         fmt.Sprintf("%f", totalShortSize),
-			Margin:       fmt.Sprintf("%f", totalShortMargin),
-			Status:       "closed",
-			TotalProfit:  shortTotalProfits,
-			Fee:          shortOrderDetails.Data.Fee,
+			Id:     shortPos.Id,
+			Symbol: shortPos.Symbol,
+
+			MarkPrice: fmt.Sprintf("%f", markPrice),
+			Size:      fmt.Sprintf("%f", totalShortSize),
+			Margin:    fmt.Sprintf("%f", totalShortMargin),
+			Status:    "closed",
 		},
 	}
 
@@ -734,18 +610,18 @@ func CloseSymbolBothPositions(
 
 }
 
-func CreateStatement(db *gorm.DB, position models.Positions, orderDetails utils.OrderDetailsResponse) *models.Statements {
+func CreateStatement(db *gorm.DB, position models.Positions, orderDetails utils.OrderDetails) *models.Statements {
 	floatSize, _ := strconv.ParseFloat(position.Size, 64)
 	dbStatement := models.Statements{
 		UserEmail:   position.UserEmail,
 		Exchange:    position.Exchange,
 		Symbol:      position.Symbol,
 		Side:        position.Side,
-		ClosedPnl:   orderDetails.Data.TotalProfits,
+		ClosedPnl:   orderDetails.TotalProfits,
 		Size:        floatSize,
 		PositionId:  position.Id,
-		QuoteAmount: floatSize * orderDetails.Data.PriceAvg,
-		ProfitUSD:   position.TotalProfit - position.Fee,
+		QuoteAmount: floatSize * orderDetails.PriceAvg,
+		ProfitUSD:   orderDetails.TotalProfits - position.Fee,
 		CreatedTime: time.Now(),
 		UpdatedTime: time.Now(),
 	}
@@ -761,9 +637,8 @@ func CreateStatement(db *gorm.DB, position models.Positions, orderDetails utils.
 		}
 		fmt.Println("🚀 ~ file: bitgetAveraging.go:731 ~ funcCreateStatement ~ statementRes:", statementRes)
 	} else {
-		fmt.Println("---- statement not saved because total profit is  ----", orderDetails.Data.TotalProfits, " ---- and fee is ---", orderDetails.Data.Fee)
+		fmt.Println("---- statement not saved because total profit is  ----", orderDetails.TotalProfits, " ---- and fee is ---", orderDetails.Fee)
 	}
 
 	return statementRes
-
 }

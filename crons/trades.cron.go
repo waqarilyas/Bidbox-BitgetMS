@@ -294,6 +294,7 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			OrderPrice:  fmt.Sprintf("%f", shortOrderPrice),
 			Fee:         shortOrder.Fee,
 			OrderId:     shortOrder.OrderID,
+			IsHandled:   false,
 		},
 		{
 			Email:       v.UserEmail,
@@ -309,6 +310,7 @@ func SaveOrdersInDatabase(db *gorm.DB, v *models.Key, coinSymbol string, quoteAm
 			OrderPrice:  fmt.Sprintf("%f", longOrderPrice),
 			Fee:         longOrder.Fee,
 			OrderId:     longOrder.OrderID,
+			IsHandled:   false,
 		},
 	}
 

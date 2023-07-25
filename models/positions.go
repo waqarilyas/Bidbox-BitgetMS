@@ -32,6 +32,8 @@ type Positions struct {
 	FirstBuyAmount  string    `json:"first_buy_amount"`
 	HedgeId         uuid.UUID `gorm:"type:uuid" json:"hedge_id"`
 	Fee             float64   `json:"fee"`
+	TotalMargin     float64   `json:"total_margin"`
+	TotalSize       float64   `json:"total_size"`
 }
 
 func UpdateAveragingPosition(db *gorm.DB, positionID int, newPositionData Positions, increment int) error {
@@ -178,4 +180,13 @@ func (u *Positions) GetGroupedOpenPositionsByExchange(db *gorm.DB, exchange stri
 	}
 
 	return groupedPositions, nil
+}
+
+func (u *Positions) GetPositionById(db *gorm.DB, positionId int) (*Positions, error) {
+	positions := Positions{}
+	err := db.Model(&Positions{}).Where("id = ?", positionId).Find(&positions).Error
+	if err != nil {
+		return &Positions{}, err
+	}
+	return &positions, nil
 }

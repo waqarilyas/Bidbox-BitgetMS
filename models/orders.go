@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 )
 
@@ -60,6 +61,7 @@ type OrderResponse struct {
 }
 
 type Order struct {
+	Id          uuid.UUID `gorm:"type:uuid" json:"id,omitempty"`
 	Email       string
 	Symbol      string
 	MarginCoin  string
@@ -73,6 +75,7 @@ type Order struct {
 	OrderPrice  string  `json:"order_price"`
 	Fee         float64 `json:"fee"`
 	OrderId     string  `json:"order_id"`
+	IsHandled   bool    `json:"is_handled"`
 }
 
 func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {
@@ -134,6 +137,25 @@ func GetOrdersByPositionIdAndSide(db *gorm.DB, positionId int, side string) ([]*
 	return positions, nil
 }
 
+func GetUnhandledOrders(db *gorm.DB) ([]*Order, error) {
+	var positions []*Order
+	err := db.Where("is_handled = ?", false).Find(&positions).Error
+	if err != nil {
+		return nil, err
+	}
+	return positions, nil
+}
+
+func UpdateOrderById(db *gorm.DB, orderId uuid.UUID, orderData Order) error {
+	err := db.Model(&Order{}).
+		Where("id = ?", orderId).
+		Updates(orderData).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {
 // 	err := db.Create(&orders).Error
 // 	if err != nil {
@@ -142,3 +164,12 @@ func GetOrdersByPositionIdAndSide(db *gorm.DB, positionId int, side string) ([]*
 // 	}
 // 	return orders, nil
 // }
+
+func GetOrdersByPositionId(db *gorm.DB, positionId int) ([]*Order, error) {
+	var positions []*Order
+	err := db.Where("position_id = ?", positionId).Find(&positions).Error
+	if err != nil {
+		return nil, err
+	}
+	return positions, nil
+}

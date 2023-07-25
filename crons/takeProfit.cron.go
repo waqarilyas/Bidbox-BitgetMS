@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	TAKE_PROFIT    = 3.0
+	TAKE_PROFIT    = 2
 	ALLOWED_LAYERS = 10.0
 )
 
@@ -57,6 +57,9 @@ func (server *TradesCron) RunProfitCron() {
 			defer wg.Done()
 			for emailPos := range ch {
 
+				// if emailPos.email != "kmtester@yopmail.com" {
+				// 	continue
+				// }
 				handleUserPositions(server.DB, emailPos.email, emailPos.positions)
 			}
 		}()
@@ -115,8 +118,10 @@ func handleUserPositions(db *gorm.DB, email string, positions []models.Positions
 		groupedDataMap[coinSymbol] = groupedData
 	}
 
-	for _, groupedPos := range groupedDataMap {
-
+	for symbol, groupedPos := range groupedDataMap {
+		if symbol != "SXRPSUSDT_SUMCBL" {
+			continue
+		}
 		handleGroupedPos(db, groupedPos, apiKey, secretKey, passphrase)
 	}
 }
@@ -159,7 +164,6 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 
 	if isLongInProfit {
 		if databaseLong.Layer > 0 {
-
 			bitget_websockets.CloseSymbolBothPositions(db, apiKey, secretKey, passphrase, databaseLong, databaseShort, markPrice, isLongInProfit, 0)
 			return
 		}
@@ -182,9 +186,9 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 			if avgPosError != nil {
 				return
 			}
+			databaseShort.Layer += 1
 		}
 
-		databaseShort.Layer += 1
 	} else {
 
 		if databaseShort.Layer > 0 {
@@ -219,7 +223,11 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 
 }
 
-func isValidGroupPos(groupedPos GroupedData, takeProfit float64, longPos utils.MarginData, shortPos utils.MarginData) (isValid, isBothProfitable bool, profitROE float64) {
+func isValidGroupPos(groupedPos GroupedData,
+	takeProfit float64,
+	longPos utils.MarginData,
+	shortPos utils.MarginData,
+) (isValid, isBothProfitable bool, profitROE float64) {
 	exchangePositions := groupedPos.ExchangePositions
 
 	if len(exchangePositions) < 2 {
@@ -227,21 +235,24 @@ func isValidGroupPos(groupedPos GroupedData, takeProfit float64, longPos utils.M
 	}
 
 	getROE := func(position utils.MarginData) float64 {
-		pnl, _ := strconv.ParseFloat(position.UnrealizedPL, 64)
 		margin, _ := strconv.ParseFloat(position.Margin, 64)
-		return (pnl / margin) * 100.0
+		percentageProfit := margin * float64(position.Leverage) * (takeProfit / 100.0)
+		return percentageProfit
 	}
 
 	longROE := getROE(longPos)
 	shortROE := getROE(shortPos)
 
-	if longROE < takeProfit && shortROE < takeProfit {
+	longPnl, _ := strconv.ParseFloat(longPos.UnrealizedPL, 64)
+	shortPnl, _ := strconv.ParseFloat(shortPos.UnrealizedPL, 64)
+
+	if longPnl < longROE && shortPnl < shortROE {
 		return false, false, 0
 	}
 
-	if longROE > takeProfit {
-		return true, true, longROE
+	if longPnl > shortPnl {
+		return true, true, longPnl
 	}
 
-	return true, false, shortROE
+	return true, false, shortPnl
 }

@@ -57,9 +57,9 @@ func (server *TradesCron) RunProfitCron() {
 			defer wg.Done()
 			for emailPos := range ch {
 
-				// if emailPos.email != "kmtester@yopmail.com" {
-				// 	continue
-				// }
+				if emailPos.email != "kmtester@yopmail.com" {
+					continue
+				}
 				handleUserPositions(server.DB, emailPos.email, emailPos.positions)
 			}
 		}()

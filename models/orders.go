@@ -137,9 +137,9 @@ func GetOrdersByPositionIdAndSide(db *gorm.DB, positionId int, side string) ([]*
 	return positions, nil
 }
 
-func GetUnhandledOrders(db *gorm.DB) ([]*Order, error) {
+func GetUnhandledOrdersByExchange(db *gorm.DB, service string) ([]*Order, error) {
 	var positions []*Order
-	err := db.Where("is_handled = ?", false).Find(&positions).Error
+	err := db.Where("is_handled = ? AND service = ?", false, service).Find(&positions).Error
 	if err != nil {
 		return nil, err
 	}

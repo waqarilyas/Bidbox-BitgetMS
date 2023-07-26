@@ -30,7 +30,7 @@ func (server *TradesCron) RunOrdersCron() {
 		return
 	}
 
-	orders, ordError := models.GetUnhandledOrders(server.DB)
+	orders, ordError := models.GetUnhandledOrdersByExchange(server.DB, "bitget")
 
 	if ordError != nil {
 		fmt.Println("--- unable to handle orders at the moment ---")

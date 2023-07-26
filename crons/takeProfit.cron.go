@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	TAKE_PROFIT    = 2
+	TAKE_PROFIT    = 0.5
 	ALLOWED_LAYERS = 10.0
 )
 

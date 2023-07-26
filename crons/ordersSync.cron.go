@@ -30,7 +30,7 @@ func (server *TradesCron) RunOrdersCron() {
 		return
 	}
 
-	orders, ordError := models.GetUnhandledOrders(server.DB)
+	orders, ordError := models.GetUnhandledOrdersByExchange(server.DB, "bitget")
 
 	if ordError != nil {
 		fmt.Println("--- unable to handle orders at the moment ---")
@@ -150,6 +150,8 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 
 func CreateStatement(db *gorm.DB, dbOrder models.Order, orderDetails utils.OrderDetails) *models.Statements {
 	floatSize, _ := strconv.ParseFloat(dbOrder.Size, 64)
+
+	acquiredProfit := orderDetails.TotalProfits - math.Abs(orderDetails.Fee)
 	dbStatement := models.Statements{
 		UserEmail:   dbOrder.Email,
 		Exchange:    dbOrder.Service,
@@ -159,7 +161,7 @@ func CreateStatement(db *gorm.DB, dbOrder models.Order, orderDetails utils.Order
 		Size:        floatSize,
 		PositionId:  dbOrder.PositionId,
 		QuoteAmount: floatSize * orderDetails.PriceAvg,
-		ProfitUSD:   orderDetails.TotalProfits,
+		ProfitUSD:   acquiredProfit,
 		CreatedTime: time.Now(),
 		UpdatedTime: time.Now(),
 	}

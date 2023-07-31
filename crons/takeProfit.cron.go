@@ -23,6 +23,11 @@ type GroupedData struct {
 	DatabasePositions []models.Positions
 }
 
+type emailPositions struct {
+	email     string
+	positions []models.Positions
+}
+
 func (server *TradesCron) RunProfitCron() {
 	fmt.Println("---- profit cron running ----")
 
@@ -31,11 +36,6 @@ func (server *TradesCron) RunProfitCron() {
 	if err != nil {
 		// Proper error handling or logging here
 		return
-	}
-
-	type emailPositions struct {
-		email     string
-		positions []models.Positions
 	}
 
 	// Create a channel to receive emailPositions struct
@@ -157,8 +157,7 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 
 	markPrice, _ := strconv.ParseFloat(exchangeLong.MarketPrice, 64)
 
-	positionProfitUSD := 0.09
-
+	positionProfitUSD := 0.0
 	if isLongInProfit {
 		if databaseLong.Layer > 0 {
 			bitget_websockets.CloseSymbolBothPositions(db, apiKey, secretKey, passphrase, databaseLong, databaseShort, markPrice, isLongInProfit, 0)

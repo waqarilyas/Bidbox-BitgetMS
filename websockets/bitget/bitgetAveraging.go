@@ -492,7 +492,7 @@ func CloseSymbolBothPositions(
 	batchOrdersResponse, batchError := utils.PlaceBitgetBatchOrder(apiKey, secretKey, passphrase, &batchOrderRequest)
 	if len(batchOrdersResponse.Data.Failure) > 0 {
 		fmt.Println("--- error closing positions ---", batchError)
-		// return
+		return
 	}
 
 	orderIds := batchOrdersResponse.Data.OrderInfo

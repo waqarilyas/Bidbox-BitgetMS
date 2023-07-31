@@ -38,6 +38,7 @@ func (server *TradesCron) RunOrdersCron() {
 	}
 
 	for _, order := range orders {
+
 		handleUnhandledOrders(server.DB, *order, *keys)
 	}
 

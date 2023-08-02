@@ -56,10 +56,9 @@ func (server *TradesCron) RunProfitCron() {
 		go func() {
 			defer wg.Done()
 			for emailPos := range ch {
-
-				// if emailPos.email != "kmtester@yopmail.com" {
-				// 	continue
-				// }
+				if emailPos.email == "kmtester@yopmail.com" {
+					continue
+				}
 				handleUserPositions(server.DB, emailPos.email, emailPos.positions)
 			}
 		}()
@@ -142,6 +141,8 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 
 	databaseLong := databasePositions[1]
 	databaseShort := databasePositions[0]
+
+	// general_websockets.SendEventOnEmail(exchangeLong, databaseLong.UserEmail)
 
 	if databasePositions[0].Side == "long" {
 		databaseLong = databasePositions[0]

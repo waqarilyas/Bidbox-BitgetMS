@@ -4,14 +4,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	nested "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/joho/godotenv"
 	"github.com/kryptomind/bidboxapi/bitgetms/controllers"
 	crons_service "github.com/kryptomind/bidboxapi/bitgetms/crons"
 	bitget_websockets "github.com/kryptomind/bidboxapi/bitgetms/websockets/bitget"
 	"github.com/robfig/cron/v3"
+	"github.com/sirupsen/logrus"
 )
 
 var server = controllers.Server{}
@@ -59,6 +58,8 @@ func Run() {
 	// Bitget Websocket Connection Logic
 	bitget_WS.DB = server.DB
 	// bitget_WS.WebsocketTest()
+
+	// general_websockets.GeneralWebsockets()
 
 	// tradesCron.Run()
 	//

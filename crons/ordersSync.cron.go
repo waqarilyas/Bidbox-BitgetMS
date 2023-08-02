@@ -39,9 +39,9 @@ func (server *TradesCron) RunOrdersCron() {
 
 	for _, order := range orders {
 
-		if order.Email == "kmtester@yopmail.com" {
-			continue
-		}
+		// if order.Email != "kmtester@yopmail.com" {
+		// 	continue
+		// }
 
 		handleUnhandledOrders(server.DB, *order, *keys)
 	}
@@ -77,6 +77,12 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 		return
 	}
 
+	// orderTotalProfit := 0.0
+
+	// if orderDetails.TotalProfits != 0 {
+	// 	orderTotalProfit = orderDetails.TotalProfits - math.Abs(orderDetails.Fee)
+	// }
+
 	dbOrder := models.Order{
 		Size:        fmt.Sprintf("%f", orderDetails.Size),
 		Side:        orderDetails.Side,
@@ -94,8 +100,8 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 	}
 
 	if orderDetails.Side == "close_long" || orderDetails.Side == "close_short" {
-		stateRes := CreateStatement(db, order, orderDetails)
-		fmt.Println("🚀 ~ file: ordersSync.cron.go:100 ~ funchandleUnhandledOrders ~ stateRes:", stateRes)
+
+		CreateStatement(db, order, orderDetails)
 
 		var dbPosition models.Positions
 		databasePosition, posError := dbPosition.GetPositionById(db, order.PositionId)
@@ -105,10 +111,10 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 
 		if databasePosition.Status == "closed" {
 			//handle profit calculation here
-			orderSide := "close_short"
-			if databasePosition.Side == "long" {
-				orderSide = "close_long"
-			}
+			// orderSide := "close_short"
+			// if databasePosition.Side == "long" {
+			// 	orderSide = "close_long"
+			// }
 
 			positionOrders, orderError := models.GetOrdersByPositionId(db, order.PositionId)
 			if orderError != nil {
@@ -119,23 +125,21 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 			totalProfit := 0.0
 			totalSize := 0.0
 			totalMargin := 0.0
-			totalOpenFee := 0.0
-			totalCloseFee := 0.0
+
+			totalFee := 0.0
 
 			for _, ord := range positionOrders {
-				if ord.Side == orderSide {
-					totalCloseFee += math.Abs(ord.Fee)
-					totalProfit += ord.Profit
-					floatSize, _ := strconv.ParseFloat(ord.Size, 64)
-					totalSize += floatSize
-					totalMargin += ord.QuoteAmount
-				} else {
-					totalOpenFee += math.Abs(ord.Fee)
-				}
+
+				totalProfit += ord.Profit
+				floatSize, _ := strconv.ParseFloat(ord.Size, 64)
+				totalSize += floatSize
+				totalMargin += ord.QuoteAmount
+
+				totalFee += math.Abs(ord.Fee)
 
 			}
 
-			totalProfit = totalProfit - totalCloseFee - (totalOpenFee)
+			totalProfit = totalProfit - totalFee
 			updatePayload := models.Positions{
 				TotalProfit: totalProfit,
 				TotalMargin: totalMargin,

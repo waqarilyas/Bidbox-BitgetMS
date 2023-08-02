@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	TAKE_PROFIT    = 2
+	TAKE_PROFIT    = 0.2
 	ALLOWED_LAYERS = 10.0
 )
 
@@ -56,9 +56,9 @@ func (server *TradesCron) RunProfitCron() {
 		go func() {
 			defer wg.Done()
 			for emailPos := range ch {
-				if emailPos.email == "kmtester@yopmail.com" {
-					continue
-				}
+				// if emailPos.email != "kmtester@yopmail.com" {
+				// 	continue
+				// }
 				handleUserPositions(server.DB, emailPos.email, emailPos.positions)
 			}
 		}()

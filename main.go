@@ -59,14 +59,6 @@ func Run() {
 	bitget_WS.DB = server.DB
 	// bitget_WS.WebsocketTest()
 
-	// general_websockets.GeneralWebsockets()
-
-	// tradesCron.Run()
-	//
-	// tradesCron.RunOrdersCron()
-
-	// tradesCron.RunProfitCron()
-
 	server.Run(":8080")
 }
 

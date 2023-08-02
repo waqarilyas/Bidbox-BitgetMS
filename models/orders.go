@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
@@ -70,12 +71,13 @@ type Order struct {
 	OrderType   string
 	Service     string
 	QuoteAmount float64
-	Profit      float64 `json:"profit"`
-	PositionId  int     `json:"position_id"`
-	OrderPrice  string  `json:"order_price"`
-	Fee         float64 `json:"fee"`
-	OrderId     string  `json:"order_id"`
-	IsHandled   bool    `json:"is_handled"`
+	Profit      float64   `json:"profit"`
+	PositionId  int       `json:"position_id"`
+	OrderPrice  string    `json:"order_price"`
+	Fee         float64   `json:"fee"`
+	OrderId     string    `json:"order_id"`
+	IsHandled   bool      `json:"is_handled"`
+	CreatedAt   time.Time `gorm:"type:timestamptz;default:now()" json:"created_at"`
 }
 
 func SaveMultipleOrders(db *gorm.DB, orders []*Order) ([]*Order, error) {

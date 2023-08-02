@@ -59,6 +59,8 @@ func Run() {
 	bitget_WS.DB = server.DB
 	// bitget_WS.WebsocketTest()
 
+	// tradesCron.RunHistoricalPosCron()
+
 	server.Run(":8080")
 }
 

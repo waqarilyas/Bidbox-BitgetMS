@@ -121,12 +121,46 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 				fmt.Println("--- unable to get position orders from database")
 				return
 			}
-
 			totalProfit := 0.0
 			totalSize := 0.0
 			totalMargin := 0.0
-
 			totalFee := 0.0
+			closePrice := 0.0
+			closingOrder := "close_long"
+
+			if dbPosition.Side == "short" {
+				closingOrder = "close_short"
+			}
+
+			if dbPosition.Layer > 0 {
+				// var biggestOrder models.Order
+				biggestSize := 0.0
+
+				for _, order := range positionOrders {
+					floatSize, _ := strconv.ParseFloat(order.Size, 64)
+					if floatSize > biggestSize {
+						biggestSize = floatSize
+						closePrice, _ = strconv.ParseFloat(order.OrderPrice, 64)
+					}
+				}
+			} else {
+				var latestCreatedAt time.Time
+				var latestClosedOrder *models.Order
+
+				for _, order := range positionOrders {
+					if order.Side == closingOrder {
+						// closePrice, _ = strconv.ParseFloat(order.OrderPrice, 64)
+						// break
+
+						if latestClosedOrder == nil || order.CreatedAt.After(latestCreatedAt) {
+							latestClosedOrder = order
+							latestCreatedAt = order.CreatedAt
+							closePrice, _ = strconv.ParseFloat(order.OrderPrice, 64)
+
+						}
+					}
+				}
+			}
 
 			for _, ord := range positionOrders {
 
@@ -134,16 +168,16 @@ func handleUnhandledOrders(db *gorm.DB, order models.Order, keys []models.Key) {
 				floatSize, _ := strconv.ParseFloat(ord.Size, 64)
 				totalSize += floatSize
 				totalMargin += ord.QuoteAmount
-
 				totalFee += math.Abs(ord.Fee)
 
 			}
 
 			totalProfit = totalProfit - totalFee
 			updatePayload := models.Positions{
-				TotalProfit: totalProfit,
-				TotalMargin: totalMargin,
-				TotalSize:   totalSize,
+				TotalProfit:   totalProfit,
+				TotalMargin:   totalMargin,
+				TotalSize:     totalSize,
+				AvgClosePrice: closePrice,
 			}
 
 			posUpdateErr := models.UpdatePositionByID(db, databasePosition.Id, updatePayload)

@@ -549,7 +549,7 @@ func CloseSymbolBothPositions(
 		fmt.Println("--- unable to get position orders for pnl ---")
 	}
 
-	shortPosOrders, orderError := models.GetOrdersByPositionIdAndSide(db, shortPos.Id, "open_long")
+	shortPosOrders, orderError := models.GetOrdersByPositionIdAndSide(db, shortPos.Id, "open_short")
 	if orderError != nil {
 		fmt.Println("--- unable to get position orders for pnl ---")
 	}

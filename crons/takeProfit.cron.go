@@ -178,7 +178,7 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 			return
 		}
 
-		if databaseShort.Layer < ALLOWED_LAYERS {
+		if databaseShort.Layer < (ALLOWED_LAYERS - 1) {
 			_, avgPosError := bitget_websockets.AverageUserPosition(db, databaseShort, apiKey, secretKey, passphrase, markPrice)
 			if avgPosError != nil {
 				return
@@ -205,7 +205,7 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 			return
 		}
 
-		if databaseLong.Layer < ALLOWED_LAYERS {
+		if databaseLong.Layer < (ALLOWED_LAYERS - 1) {
 			_, avgPosError := bitget_websockets.AverageUserPosition(db, databaseLong, apiKey, secretKey, passphrase, markPrice)
 			if avgPosError != nil {
 				return

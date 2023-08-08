@@ -37,7 +37,6 @@ func (server *TradesCron) RunProfitCron() {
 		fmt.Println("error getting settings")
 		return
 	}
-	fmt.Println("🚀 ~ file: takeProfit.cron.go:36 ~ func ~ settingValues:", settingValues)
 
 	TAKE_PROFIT := settingValues.TakeProfit
 	ALLOWED_LAYERS := settingValues.Layers

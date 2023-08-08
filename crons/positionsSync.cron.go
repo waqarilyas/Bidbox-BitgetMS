@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"sync"
 
 	"github.com/jinzhu/gorm"
 	"github.com/kryptomind/bidboxapi/bitgetms/helpers"
@@ -19,7 +18,7 @@ func NewPositionSyncCron() *TradesCron {
 func (server *TradesCron) RunPositionsCron() {
 	fmt.Println("--- positions cron started ---")
 
-	var wg sync.WaitGroup
+	// var wg sync.WaitGroup
 
 	key := models.Key{}
 	keys, err := key.FindKeysByService(server.DB, "bitget")
@@ -29,19 +28,11 @@ func (server *TradesCron) RunPositionsCron() {
 	}
 
 	for _, v := range *keys {
-		wg.Add(1)
-		go func(v models.Key) {
-			defer wg.Done()
-
-			if !v.Start {
-				return
-			}
-
-			handleOpenPositions(server.DB, v)
-		}(v)
+		// func(v models.Key) {
+		handleOpenPositions(server.DB, v)
+		// }(v)
 	}
 
-	wg.Wait()
 }
 
 func handleOpenPositions(db *gorm.DB, key models.Key) {

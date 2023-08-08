@@ -309,6 +309,7 @@ func ExecuteAndSaveOrder(
 	orderSide string) (string, error) {
 	orderResponse, closePosError := utils.PlaceBitgetOrder(apiKey, secretKey, passphrase, payload)
 	if closePosError != nil {
+		fmt.Println("🚀 ~ file: bitgetAveraging.go:312 ~ closePosError:", closePosError)
 		fmt.Println(" --- unable to close position ---")
 		fmt.Println(" --- user email ---", position.UserEmail)
 		fmt.Println(" --- coinSymbol ---", position.Symbol)

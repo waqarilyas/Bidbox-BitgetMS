@@ -61,6 +61,9 @@ func Run() {
 
 	// tradesCron.RunHistoricalPosCron()
 
+	// decrypted, _ := helpers.DecryptStrings("DhMg+sDpp1nC78jokiqyv4/qdILe9xGb2gcUa00/UCBfbHHFnQA=")
+	// fmt.Println("🚀 ~ file: main.go:77 ~ funcRun ~ decrypted:", decrypted)
+
 	server.Run(":8080")
 }
 

@@ -154,14 +154,10 @@ func handleClosedPosition(db *gorm.DB, position models.Positions) {
 
 		for _, order := range positionOrders {
 			if order.Side == closingOrder {
-				// closePrice, _ = strconv.ParseFloat(order.OrderPrice, 64)
-				// break
-
 				if latestClosedOrder == nil || order.CreatedAt.After(latestCreatedAt) {
 					latestClosedOrder = order
 					latestCreatedAt = order.CreatedAt
 					closePrice, _ = strconv.ParseFloat(order.OrderPrice, 64)
-
 				}
 			}
 		}

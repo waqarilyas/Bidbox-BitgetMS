@@ -12,10 +12,10 @@ import (
 	bitget_websockets "github.com/kryptomind/bidboxapi/bitgetms/websockets/bitget"
 )
 
-const (
-	TAKE_PROFIT    = 2
-	ALLOWED_LAYERS = 10.0
-)
+// const (
+// 	TAKE_PROFIT    = 2
+// 	ALLOWED_LAYERS = 10.0
+// )
 
 type GroupedData struct {
 	Symbol            string
@@ -30,6 +30,17 @@ type emailPositions struct {
 
 func (server *TradesCron) RunProfitCron() {
 	fmt.Println("---- profit cron running ----")
+	var settings models.Settings
+
+	settingValues, settingsError := settings.GetSettings(server.DB)
+	if settingsError != nil {
+		fmt.Println("error getting settings")
+		return
+	}
+	fmt.Println("🚀 ~ file: takeProfit.cron.go:36 ~ func ~ settingValues:", settingValues)
+
+	TAKE_PROFIT := settingValues.TakeProfit
+	ALLOWED_LAYERS := settingValues.Layers
 
 	position := models.Positions{}
 	positions, err := position.GetOpenPositionsByExchange(server.DB, "bitget")
@@ -56,10 +67,10 @@ func (server *TradesCron) RunProfitCron() {
 		go func() {
 			defer wg.Done()
 			for emailPos := range ch {
-				// if emailPos.email != "kmtester@yopmail.com" {
-				// 	continue
-				// }
-				handleUserPositions(server.DB, emailPos.email, emailPos.positions)
+				if emailPos.email == "kmtester@yopmail.com" {
+					continue
+				}
+				handleUserPositions(server.DB, emailPos.email, emailPos.positions, TAKE_PROFIT, ALLOWED_LAYERS)
 			}
 		}()
 	}
@@ -76,7 +87,7 @@ func positionsByUserEmail(positions []models.Positions) map[string][]models.Posi
 	return positionsByUserEmail
 }
 
-func handleUserPositions(db *gorm.DB, email string, positions []models.Positions) {
+func handleUserPositions(db *gorm.DB, email string, positions []models.Positions, TAKE_PROFIT float64, ALLOWED_LAYERS int) {
 	userKeys, keysErr := models.FindKeysByEmailandService(db, email, "bitget")
 	if keysErr != nil {
 		// Proper error handling or logging here
@@ -118,11 +129,11 @@ func handleUserPositions(db *gorm.DB, email string, positions []models.Positions
 	}
 
 	for _, groupedPos := range groupedDataMap {
-		handleGroupedPos(db, groupedPos, apiKey, secretKey, passphrase)
+		handleGroupedPos(db, groupedPos, apiKey, secretKey, passphrase, TAKE_PROFIT, ALLOWED_LAYERS)
 	}
 }
 
-func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secretKey string, passphrase string) {
+func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secretKey string, passphrase string, TAKE_PROFIT float64, ALLOWED_LAYERS int) {
 	exchangePositions := groupedPos.ExchangePositions
 	databasePositions := groupedPos.DatabasePositions
 
@@ -149,12 +160,10 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 		databaseShort = databasePositions[1]
 	}
 
-	isValid, isLongInProfit, pnl := isValidGroupPos(groupedPos, TAKE_PROFIT, exchangeLong, exchangeShort)
+	isValid, isLongInProfit, _ := isValidGroupPos(groupedPos, TAKE_PROFIT, exchangeLong, exchangeShort)
 	if !isValid {
 		return
 	}
-
-	fmt.Println("🚀 ~ file: takeProfit.cron.go:126 ~ funchandleGroupedPos ~ isBothProfitable, roe:", isLongInProfit, pnl)
 
 	markPrice, _ := strconv.ParseFloat(exchangeLong.MarketPrice, 64)
 

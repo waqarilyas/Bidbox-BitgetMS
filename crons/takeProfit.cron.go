@@ -44,7 +44,6 @@ func (server *TradesCron) RunProfitCron() {
 	position := models.Positions{}
 	positions, err := position.GetOpenPositionsByExchange(server.DB, "bitget")
 	if err != nil {
-
 		return
 	}
 

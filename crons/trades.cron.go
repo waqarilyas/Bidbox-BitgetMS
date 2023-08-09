@@ -56,9 +56,9 @@ func (server *TradesCron) Run() {
 				return
 			}
 
-			if v.UserEmail == "kmtester@yopmail.com" {
-				return
-			}
+			// if v.UserEmail != "kmtester@yopmail.com" {
+			// 	return
+			// }
 
 			placeBitgetOrder(&v, v.CapitalPerTrade, server.DB, coinPairs)
 		}(v)
@@ -81,17 +81,14 @@ func GetTradeEligibleCoinSymbol(apiKey string, secretKey string, passphrase stri
 		pairSymbol := "S" + vCoinSymbol[0] + "S" + vCoinSymbol[1] + "_SUMCBL"
 		matched := false
 		for _, pos := range userAllOpenPositions {
-
 			if pos.Symbol == pairSymbol && pos.Available != "0" {
 				matched = true
 				break
 			}
 		}
-
 		if !matched {
 			eligibleCoinSymbols = append(eligibleCoinSymbols, pairSymbol)
 		}
-
 	}
 
 	log.Println(eligibleCoinSymbols)

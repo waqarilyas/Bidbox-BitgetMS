@@ -39,9 +39,9 @@ func (server *TradesCron) RunOrdersCron() {
 
 	for _, order := range orders {
 
-		if order.Email == "kmtester@yopmail.com" {
-			continue
-		}
+		// if order.Email != "kmtester@yopmail.com" {
+		// 	continue
+		// }
 
 		handleUnhandledOrders(server.DB, *order, *keys)
 	}

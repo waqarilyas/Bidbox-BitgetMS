@@ -38,20 +38,18 @@ func (server *TradesCron) RunProfitCron() {
 		return
 	}
 
-	TAKE_PROFIT := settingValues.TakeProfit
+	TAKE_PROFIT := settingValues.ProfitPercentage
 	ALLOWED_LAYERS := settingValues.Layers
 
 	position := models.Positions{}
 	positions, err := position.GetOpenPositionsByExchange(server.DB, "bitget")
 	if err != nil {
-		// Proper error handling or logging here
+
 		return
 	}
 
-	// Create a channel to receive emailPositions struct
 	ch := make(chan emailPositions)
 
-	// Fetch positions from the database concurrently
 	go func() {
 		for email, positions := range positionsByUserEmail(*positions) {
 			ch <- emailPositions{email, positions}
@@ -61,7 +59,7 @@ func (server *TradesCron) RunProfitCron() {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ { // Choose an appropriate number of goroutines to run concurrently
+	for i := 0; i < 10; i++ { // 10 goroutines will run concurrently
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -89,19 +87,19 @@ func positionsByUserEmail(positions []models.Positions) map[string][]models.Posi
 func handleUserPositions(db *gorm.DB, email string, positions []models.Positions, TAKE_PROFIT float64, ALLOWED_LAYERS int) {
 	userKeys, keysErr := models.FindKeysByEmailandService(db, email, "bitget")
 	if keysErr != nil {
-		// Proper error handling or logging here
+
 		return
 	}
 
 	apiKey, secretKey, passphrase, err := helpers.DecryptAllKeys(userKeys.ApiKey, userKeys.SecretKey, userKeys.Passphrase, "bitget")
 	if err != nil {
-		// Proper error handling or logging here
+
 		return
 	}
 
 	_, userAllOpenPositions, openPosError := utils.PerformBitgetPositionQuery(apiKey, secretKey, passphrase, "")
 	if openPosError != nil {
-		// Proper error handling or logging here
+
 		return
 	}
 
@@ -137,7 +135,7 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 	databasePositions := groupedPos.DatabasePositions
 
 	if len(exchangePositions) < 2 || len(databasePositions) < 2 {
-		// Proper error handling or logging here
+
 		return
 	}
 
@@ -193,7 +191,6 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 			}
 			databaseShort.Layer += 1
 		}
-
 	} else {
 
 		if databaseShort.Layer > 0 {

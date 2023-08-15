@@ -29,7 +29,6 @@ type emailPositions struct {
 }
 
 func (server *TradesCron) RunProfitCron() {
-	fmt.Println("---- profit cron running ----")
 	var settings models.Settings
 
 	settingValues, settingsError := settings.GetSettings(server.DB)
@@ -39,7 +38,7 @@ func (server *TradesCron) RunProfitCron() {
 	}
 
 	TAKE_PROFIT := settingValues.ProfitPercentage
-	// TAKE_PROFIT := 0.5
+
 	ALLOWED_LAYERS := settingValues.Layers
 
 	position := models.Positions{}
@@ -213,9 +212,9 @@ func handleGroupedPos(db *gorm.DB, groupedPos GroupedData, apiKey string, secret
 			if avgPosError != nil {
 				return
 			}
-		}
 
-		databaseLong.Layer += 1
+			databaseLong.Layer += 1
+		}
 
 	}
 

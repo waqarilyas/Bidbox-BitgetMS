@@ -33,14 +33,14 @@ func (server *TradesCron) RunHistoricalPosCron() {
 	for _, v := range *dbPositions {
 		// wg.Add(1)
 
+		if v.UserEmail == "kmtester@yopmail.com" {
+			continue
+		}
+
 		handleClosedPosition(server.DB, v)
 
 		// go func(v models.Positions) {
 		// 	defer wg.Done()
-
-		// 	// if v.UserEmail != "kmtester@yopmail.com" {
-		// 	// 	return
-		// 	// }
 
 		// 	handleClosedPosition(server.DB, v)
 		// }(v)

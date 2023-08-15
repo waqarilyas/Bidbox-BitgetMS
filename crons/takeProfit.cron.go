@@ -63,7 +63,6 @@ func (server *TradesCron) RunProfitCron() {
 		go func() {
 			defer wg.Done()
 			for emailPos := range ch {
-
 				handleUserPositions(server.DB, emailPos.email, emailPos.positions, TAKE_PROFIT, ALLOWED_LAYERS)
 			}
 		}()

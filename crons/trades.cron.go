@@ -56,10 +56,6 @@ func (server *TradesCron) Run() {
 				return
 			}
 
-			if v.UserEmail == "kmtester@yopmail.com" {
-				return
-			}
-
 			placeBitgetOrder(&v, v.CapitalPerTrade, server.DB, coinPairs)
 		}(v)
 	}
